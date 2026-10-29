@@ -1,0 +1,16 @@
+{
+  "name": "漫畫分鏡提示詞工坊",
+  "short_name": "漫畫提示詞",
+  "description": "把一段文字變成多格短篇漫畫的生圖提示詞，適用 Gemini、ChatGPT、Midjourney 等 AI。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fffaf0",
+  "theme_color": "#ffd23f",
+  "lang": "zh-TW",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

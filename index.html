@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>漫畫分鏡提示詞工坊</title>
+<meta name="description" content="把一段文字變成多格短篇漫畫的生圖提示詞，可用於 Gemini、ChatGPT、Midjourney 等 AI；可選漫畫風格、格數、比例與登場人物。">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffd23f">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fffaf0; --paper2:#fff3d6; --card:#ffffff; --ink:#1b1b1f; --ink2:#4a4a52; --line:#1b1b1f; --soft:#e7dfcc;
+  --accent:#ffd23f; --accent2:#e63946; --blue:#2b6cb0; --dot:rgba(27,27,31,.07); --shadow:#1b1b1f; --field:#fffdf7;
+  --mq:0px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#15151a; --paper2:#22222a; --card:#1e1e25; --ink:#f3f0e8; --ink2:#b9b5ab; --line:#e8e3d6; --soft:#3a3a44;
+    --accent:#ffd23f; --accent2:#ff6b74; --blue:#7fb2ff; --dot:rgba(255,255,255,.05); --shadow:#ffd23f; --field:#17171d;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#15151a; --paper2:#22222a; --card:#1e1e25; --ink:#f3f0e8; --ink2:#b9b5ab; --line:#e8e3d6; --soft:#3a3a44;
+  --accent:#ffd23f; --accent2:#ff6b74; --blue:#7fb2ff; --dot:rgba(255,255,255,.05); --shadow:#ffd23f; --field:#17171d;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Noto Sans TC",system-ui,sans-serif;color:var(--ink);background:var(--paper);
+  background-image:radial-gradient(var(--dot) 1.4px,transparent 1.6px);background-size:14px 14px;line-height:1.55;padding-top:var(--mq)}
+body.has-marquee{--mq:30px}
+a{color:var(--blue)}
+#marqueeBar{position:fixed;top:0;left:0;right:0;height:30px;background:var(--accent2);color:#fff;z-index:1500;overflow:hidden;display:none;align-items:center;font-size:13px;font-weight:700}
+#marqueeBar.show{display:flex}
+#marqueeTrack{display:inline-block;white-space:nowrap;padding-left:100%;animation:marquee 30s linear infinite}
+#marqueeBar:hover #marqueeTrack{animation-play-state:paused}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+header.top{max-width:1320px;margin:0 auto;padding:18px 16px 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:12px;min-width:0}
+.logo .badge{width:52px;height:52px;border:3px solid var(--line);border-radius:14px;background:var(--accent);display:grid;place-items:center;font-size:28px;box-shadow:3px 3px 0 var(--shadow);flex:none;transform:rotate(-4deg)}
+.logo h1{margin:0;font-size:clamp(20px,3.4vw,28px);font-weight:900;letter-spacing:.02em}
+.logo p{margin:0;color:var(--ink2);font-size:13.5px}
+.tools{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.tbtn{font:inherit;font-weight:700;font-size:14px;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:7px 12px;cursor:pointer;box-shadow:2px 2px 0 var(--shadow);text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.tbtn:hover{background:var(--accent);color:#1b1b1f}
+.tbtn:active{transform:translate(2px,2px);box-shadow:none}
+
+.warnbar{max-width:1320px;margin:4px auto 0;padding:0 16px}
+.warnbar div{border:2px dashed var(--accent2);border-radius:10px;padding:7px 12px;font-size:13px;color:var(--ink2);background:var(--card)}
+.warnbar b{color:var(--accent2)}
+.linkbtn{font:inherit;background:none;border:0;color:var(--blue);text-decoration:underline;cursor:pointer;padding:0}
+
+main{max-width:1320px;margin:0 auto;padding:14px 16px 24px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:18px;align-items:start}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.card{background:var(--card);border:3px solid var(--line);border-radius:16px;box-shadow:5px 5px 0 var(--shadow);padding:16px;min-width:0}
+.card h2{margin:0 0 10px;font-size:18px;font-weight:900;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .step{background:var(--accent);color:#1b1b1f;border:2px solid var(--line);border-radius:999px;width:28px;height:28px;display:inline-grid;place-items:center;font-size:15px;flex:none}
+.card h2 .aside{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--ink2)}
+.hint{font-size:13px;color:var(--ink2);margin:0 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{font:inherit;font-size:13px;font-weight:700;border:2px solid var(--line);background:var(--paper2);color:var(--ink);border-radius:999px;padding:3px 11px;cursor:pointer}
+.chip:hover{background:var(--accent);color:#1b1b1f}
+textarea,input[type=text],input[type=password],select{font:inherit;font-size:14px;color:var(--ink);background:var(--field);border:2px solid var(--soft);border-radius:9px;padding:7px 9px;width:100%;min-width:0}
+textarea:focus,input:focus,select:focus{outline:none;border-color:var(--line);box-shadow:0 0 0 3px rgba(255,210,63,.45)}
+#srcText{min-height:150px;resize:vertical;line-height:1.7}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.btn{font:inherit;font-weight:900;font-size:14.5px;border:2.5px solid var(--line);border-radius:11px;padding:8px 14px;cursor:pointer;background:var(--card);color:var(--ink);box-shadow:3px 3px 0 var(--shadow)}
+.btn.primary{background:var(--accent);color:#1b1b1f}
+.btn.red{background:var(--accent2);color:#fff}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.ghost{box-shadow:none;border-width:2px;font-weight:700;font-size:13.5px;padding:6px 11px}
+.status{font-size:12.5px;color:var(--ink2);flex-basis:100%}
+.count{font-size:12.5px;color:var(--ink2);margin-left:auto}
+
+.opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fld{display:flex;flex-direction:column;gap:3px;min-width:0}
+.fld>span{font-size:12.5px;font-weight:700;color:var(--ink2)}
+.fld.wide{grid-column:1/-1}
+.switches{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:14px;align-items:center}
+.switches label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:10px;overflow:hidden}
+.seg label{padding:5px 11px;font-weight:700;font-size:13.5px;gap:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent);color:#1b1b1f}
+.seg label:has(input:focus-visible){outline:2px solid var(--blue);outline-offset:-3px}
+
+.char-card{border:2px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--paper2)}
+.char-head{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.char-head select{flex:1 1 160px;width:auto}
+.char-no{width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-weight:900;font-size:13px;flex:none}
+.char-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.mini{font:inherit;font-size:12.5px;font-weight:700;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 8px;cursor:pointer;white-space:nowrap}
+.mini:hover{background:var(--accent);color:#1b1b1f}
+.mini.danger:hover{background:var(--accent2);color:#fff}
+.empty{color:var(--ink2);font-size:13.5px;margin:6px 0;list-style:none}
+
+.panel-card{display:flex;gap:10px;border:2.5px solid var(--line);border-radius:4px;padding:10px;margin-bottom:10px;background:var(--card);position:relative}
+.panel-card:nth-child(odd){transform:rotate(-.25deg)}
+.panel-card:nth-child(even){transform:rotate(.25deg)}
+.panel-no{flex:none;width:42px;height:42px;flex-direction:column;background:var(--accent2);color:#fff;border:2px solid var(--line);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;line-height:1}
+.panel-no small{font-size:9px;font-weight:700;display:block;margin-top:1px;opacity:.85}
+.panel-body{flex:1;min-width:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.panel-body .half{grid-column:span 2}
+.panel-body .fld>span{font-size:11.5px}
+.panel-body input,.panel-body select,.panel-body textarea{font-size:13px;padding:5px 7px}
+.panel-body textarea{resize:vertical;min-height:40px}
+.en-more summary{cursor:pointer;font-size:12.5px;color:var(--ink2);font-weight:700}
+.en-more .char-grid{margin-top:6px}
+
+.tabs{display:flex;gap:0;border-bottom:3px solid var(--line);margin-bottom:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.tab{font:inherit;font-weight:900;font-size:14.5px;border:3px solid var(--line);border-bottom:0;background:var(--paper2);color:var(--ink);padding:7px 14px;margin-right:-3px;border-radius:10px 10px 0 0;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--accent);color:#1b1b1f}
+.ptip{font-size:13px;color:var(--ink2);background:var(--paper2);border-left:4px solid var(--accent);padding:7px 10px;border-radius:0 8px 8px 0;margin:0 0 10px}
+#promptOut{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,"Noto Sans TC",monospace;font-size:13.5px;line-height:1.65;background:var(--field);border:2px solid var(--soft);border-radius:10px;padding:12px;margin:0;max-height:440px;overflow:auto}
+
+footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12.5px;color:var(--ink2)}
+
+.modal{position:fixed;inset:0;background:rgba(10,10,14,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:2000}
+.modal.show{display:flex}
+.modal .mcard{background:var(--card);color:var(--ink);border:3px solid var(--line);border-radius:16px;box-shadow:6px 6px 0 var(--shadow);width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px}
+.modal h2{margin:0 0 8px;font-size:19px;font-weight:900;display:flex;align-items:center;gap:8px}
+.xbtn{margin-left:auto;font:inherit;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;width:32px;height:32px;cursor:pointer;font-weight:900}
+.sect{font-weight:900;margin:14px 0 6px;font-size:15px}
+.sub{margin:0 0 6px;color:var(--ink2);font-size:13.5px}
+.warn{margin:0;padding-left:20px;font-size:13.5px;line-height:1.7;color:var(--ink2)}
+.warn li{margin-bottom:4px}
+.creator-box{margin-top:12px;border:2px solid var(--line);border-radius:12px;padding:10px 14px;font-size:13.5px;line-height:1.7;color:var(--ink2);background:var(--paper2)}
+.sfoot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.sgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.note{font-size:12.5px;color:var(--ink2)}
+.about-links{display:flex;flex-wrap:wrap;gap:8px}
+.hlist{list-style:none;padding:0;margin:0}
+.hlist li{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.hist-item{flex:1;text-align:left;font:inherit;border:2px solid var(--soft);background:var(--paper2);color:var(--ink);border-radius:10px;padding:7px 10px;cursor:pointer;display:flex;flex-direction:column;min-width:0}
+.hist-item:hover{border-color:var(--line)}
+.hist-item small,.hlist small{color:var(--ink2);font-size:12px;display:block}
+.hlist li>span{flex:1;min-width:0}
+
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,30px);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:10px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:2500;max-width:calc(100% - 32px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:980px){
+  main{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:560px){
+  .opts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .char-grid,.sgrid{grid-template-columns:minmax(0,1fr)}
+  .panel-body{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tools .tx{display:none}
+  .panel-card{transform:none!important;flex-direction:column}
+  .card{padding:12px;box-shadow:3px 3px 0 var(--shadow)}
+}
+@media (prefers-reduced-motion: reduce){ #marqueeTrack{animation:none} #toast{transition:none} .panel-card{transform:none!important} }
+</style>
+</head>
+<body>
+<div id="marqueeBar"><div id="marqueeTrack"></div></div>
+
+<header class="top">
+  <div class="logo">
+    <div class="badge" aria-hidden="true">💬</div>
+    <div>
+      <h1>漫畫分鏡提示詞工坊</h1>
+      <p>貼上一段文字 → 拆成多格短篇漫畫 → 一鍵產出 Gemini／ChatGPT／Midjourney 生圖提示詞</p>
+    </div>
+  </div>
+  <nav class="tools" aria-label="工具列">
+    <a class="tbtn" href="manual.html" target="_blank" rel="noopener">📖<span class="tx"> 操作手冊</span></a>
+    <button class="tbtn" id="aboutBtn" type="button" aria-haspopup="dialog">ℹ<span class="tx"> 關於</span></button>
+    <button class="tbtn" id="settingsBtn" type="button" aria-haspopup="dialog">⚙<span class="tx"> 常用設定</span></button>
+    <button class="tbtn" id="installBtn" type="button">📲<span class="tx"> 安裝</span></button>
+  </nav>
+</header>
+
+<div class="warnbar"><div><b>⚠ 使用警語：</b>請勿用來生成真實人物肖像或既有動漫／品牌的版權角色；AI 生圖結果每次不同，角色一致性與文字正確性無法保證；商業使用請自行確認各 AI 平台的條款。<button class="linkbtn" type="button" data-open-about>完整警語</button></div></div>
+
+<main>
+  <div class="col">
+    <section class="card" aria-labelledby="h1s">
+      <h2 id="h1s"><span class="step">1</span>輸入故事文字 <span class="aside" id="textCount">0 字</span></h2>
+      <p class="hint">貼上故事、貼文、課程重點或一段對話；用「」標出對白，人物名字寫在文中會自動對應登場角色。範例：</p>
+      <div class="chips" id="exampleChips"></div>
+      <textarea id="srcText" aria-label="故事文字" placeholder="例：星期一早上，小晴抱著咖啡衝進辦公室……&#10;她大喊：「完了完了，下午就要報告了！」"></textarea>
+      <div class="row">
+        <button class="btn primary" id="btnStoryboard" type="button">✂ 規則式分鏡</button>
+        <button class="btn red" id="btnAiStoryboard" type="button">🤖 AI 分鏡</button>
+        <button class="btn ghost" id="btnClear" type="button">清空</button>
+        <span class="status" id="aiStatus">規則式免金鑰；AI 分鏡需在 ⚙ 常用設定填入自己的 API 金鑰，失敗會自動改用規則式。</span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h2s">
+      <h2 id="h2s"><span class="step">2</span>漫畫設定</h2>
+      <div class="opts">
+        <label class="fld"><span>漫畫風格</span><select id="optStyle"></select></label>
+        <label class="fld"><span>格數</span><select id="optPanels"></select></label>
+        <label class="fld"><span>圖片比例</span><select id="optRatio"></select></label>
+        <label class="fld"><span>版面排列</span><select id="optLayout"></select></label>
+        <label class="fld"><span>色彩</span><select id="optColor"></select></label>
+        <label class="fld"><span>情緒基調</span><select id="optMood"></select></label>
+        <label class="fld"><span>對白語言</span><select id="optLang"></select></label>
+        <label class="fld"><span>對白框樣式</span><select id="optBubble"></select></label>
+        <label class="fld"><span>閱讀方向</span><select id="optDir"></select></label>
+      </div>
+      <div class="switches">
+        <label><input type="checkbox" id="optSfx"> 加上音效字（碰！咻——）</label>
+        <span class="seg" role="radiogroup" aria-label="生成方式">
+          <label><input type="radio" name="genMode" value="page">整頁一張圖</label>
+          <label><input type="radio" name="genMode" value="each">逐格分開生成</label>
+        </span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h3s">
+      <h2 id="h3s"><span class="step">3</span>登場人物 <span class="aside" id="charCount">0 / 4</span></h2>
+      <p class="hint">外型寫得越具體，多格之間的角色越一致。可套用 8 位預設人物，或存成「我的人物」下次再用。</p>
+      <div id="charList"></div>
+      <div class="row">
+        <button class="btn ghost" id="btnAddChar" type="button">＋ 新增人物</button>
+        <button class="btn ghost" id="btnManageChars" type="button">🗂 管理我的人物</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card" aria-labelledby="h5s">
+      <h2 id="h5s"><span class="step">4</span>生圖提示詞 <span class="aside" id="promptLen"></span></h2>
+      <div class="tabs" id="platformTabs" role="tablist" aria-label="目標 AI 平台"></div>
+      <p class="ptip" id="platformTip"></p>
+      <pre id="promptOut" tabindex="0" aria-live="polite"></pre>
+      <div class="row">
+        <button class="btn primary" id="btnCopy" type="button">📋 複製</button>
+        <button class="btn ghost" id="btnDownload" type="button">⬇ 下載 .txt</button>
+        <button class="btn ghost" id="btnDownloadAll" type="button">⬇ 四平台一次下載</button>
+        <button class="btn ghost" id="btnSaveJson" type="button">💾 儲存專案</button>
+        <button class="btn ghost" id="btnOpenJson" type="button">📂 開啟專案</button>
+        <button class="btn ghost" id="btnHistory" type="button">🕘 歷史紀錄</button>
+        <input type="file" id="fileJson" accept=".json,application/json" hidden>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h4s">
+      <h2 id="h4s"><span class="step">5</span>分鏡微調 <span class="aside">每格都可直接修改，上方提示詞即時更新</span></h2>
+      <div id="panelList"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <img src="https://visitor-badge.laobi.icu/badge?page_id=m255525.comicpromptstudio" alt="訪客次數" height="20">
+  <span>創作者 <a href="manual.html#creator" target="_blank" rel="noopener">Mark Tsai（蔡豐全）</a></span>
+  <button class="linkbtn" type="button" data-open-about>⚠ 使用警語</button>
+  <a href="manual.html" target="_blank" rel="noopener">📖 操作手冊</a>
+</footer>
+
+<!-- ⚙ 常用設定 -->
+<div class="modal" id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="mcard">
+    <h2 id="setTitle">⚙ 常用設定 <button class="xbtn" type="button" data-close="settings" aria-label="關閉">✕</button></h2>
+    <p class="sub">設定只存在這台裝置的瀏覽器。「儲存」只影響新專案；「儲存並套用」會同時改目前專案。</p>
+    <div class="sect">預設值</div>
+    <div class="sgrid">
+      <label class="fld"><span>預設平台分頁</span><select id="setPlatform"></select></label>
+      <label class="fld"><span>預設漫畫風格</span><select id="setStyle"></select></label>
+      <label class="fld"><span>預設格數</span><select id="setPanels"></select></label>
+      <label class="fld"><span>預設比例</span><select id="setRatio"></select></label>
+      <label class="fld"><span>預設版面</span><select id="setLayout"></select></label>
+      <label class="fld"><span>預設色彩</span><select id="setColor"></select></label>
+      <label class="fld"><span>預設對白語言</span><select id="setLang"></select></label>
+      <label class="fld"><span>外觀</span><select id="setTheme"><option value="system">跟隨系統</option><option value="light">亮色</option><option value="dark">暗色</option></select></label>
+    </div>
+    <div class="sect">AI 分鏡（選用，自備金鑰 BYOK）</div>
+    <div class="sgrid">
+      <label class="fld"><span>服務商</span><select id="setAiProvider"></select></label>
+      <label class="fld"><span>模型</span><select id="setAiModel"></select></label>
+      <label class="fld wide" style="grid-column:1/-1"><span>API 金鑰（只存在本機瀏覽器，直接送到該服務商）</span><input type="password" id="setAiKey" autocomplete="off" placeholder="貼上你的 API 金鑰"></label>
+    </div>
+    <div class="sfoot">
+      <button class="btn ghost" type="button" id="clearKey">清除金鑰</button>
+      <button class="btn ghost" type="button" id="settingsReset">恢復預設</button>
+      <span style="flex:1"></span>
+      <button class="btn" type="button" id="settingsSave">儲存</button>
+      <button class="btn primary" type="button" id="settingsApply">儲存並套用</button>
+    </div>
+    <div class="sect">關於本工具</div>
+    <div class="about-links">
+      <a class="mini" href="manual.html" target="_blank" rel="noopener">📖 操作手冊</a>
+      <button class="mini" type="button" data-open-about>⚠ 使用警語</button>
+      <button class="mini" type="button" data-open-about="creator">👤 創作者資訊</button>
+      <button class="mini" type="button" data-install>📲 加入主畫面</button>
+    </div>
+    <p class="note" style="display:flex;align-items:center;gap:8px">訪客數 <img src="https://visitor-badge.laobi.icu/badge?page_id=m255525.comicpromptstudio" alt="訪客次數" height="20"></p>
+  </div>
+</div>
+
+<!-- ℹ 關於 -->
+<div class="modal" id="about" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+  <div class="mcard">
+    <h2 id="aboutTitle">ℹ 關於漫畫分鏡提示詞工坊 <button class="xbtn" id="aboutClose" type="button" aria-label="關閉">✕</button></h2>
+    <p class="sub">把文字拆成多格漫畫分鏡，再組成各家 AI 看得懂的生圖提示詞。<a href="manual.html" target="_blank" rel="noopener">📖 操作手冊</a></p>
+    <div class="sect">⚠ 使用警語</div>
+    <ul class="warn">
+      <li>本工具只產生<b>文字提示詞</b>，不會替你生成圖片；實際畫面由你選用的 AI 平台產生，<b>每次結果不同</b>，角色一致性與畫面中的文字（尤其中文）都可能出錯，請自行檢查與修正。</li>
+      <li><b>請勿用來生成真實人物的肖像</b>（明星、政治人物、身邊的人），也不要指定既有動漫、遊戲或品牌的版權角色；內建 8 位人物皆為原創設定。</li>
+      <li>生成內容需遵守各 AI 平台（Google、OpenAI、Midjourney 等）的使用政策；<b>商業使用前請自行確認</b>各平台對 AI 生成圖片的授權規定。</li>
+      <li>選用 AI 分鏡時，故事文字會直接送到你填寫金鑰的服務商，費用由你的帳號支付；請勿輸入機密或個人資料。</li>
+      <li>你的文字、人物、設定與金鑰只存在這台裝置的瀏覽器，不會上傳到本站。</li>
+      <li>僅供教學、課程及個人使用，禁止未經授權公開發布、販售或商業化使用本工具。</li>
+    </ul>
+    <div class="creator-box" id="creatorBox">
+      <p style="margin:0"><strong>創作者：Mark Tsai（蔡豐全）</strong></p>
+      <p style="margin:4px 0">勞動力發展署創業顧問（2017 起）、經濟部 SBIR 海選專案評審委員（2019－2024），長期擔任小型企業人力提升計畫顧問與多項政府計畫業師、評審委員；專長銷售數據分析、AI 工具運用、政府補助計畫申請、創業與跨境電商。</p>
+      <p style="margin:0"><a href="manual.html#creator" target="_blank" rel="noopener">完整經歷與證照</a>｜<a href="mailto:tsaimark@gmail.com">tsaimark@gmail.com</a></p>
+    </div>
+    <div class="sfoot">
+      <span class="note" style="margin:0 auto 0 0;display:flex;align-items:center;gap:6px">訪客數 <img src="https://visitor-badge.laobi.icu/badge?page_id=m255525.comicpromptstudio" alt="訪客次數" height="20"></span>
+      <button class="btn ghost" type="button" data-install>📲 加入主畫面</button>
+      <button class="btn primary" id="aboutOk" type="button">我知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 歷史紀錄 -->
+<div class="modal" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+  <div class="mcard">
+    <h2 id="histTitle">🕘 歷史紀錄 <button class="xbtn" type="button" data-close="historyModal" aria-label="關閉">✕</button></h2>
+    <p class="sub">最近 20 筆（複製、下載或儲存專案時自動記錄），點一下即可載入。</p>
+    <ul class="hlist" id="historyList"></ul>
+  </div>
+</div>
+
+<!-- 我的人物 -->
+<div class="modal" id="myCharsModal" role="dialog" aria-modal="true" aria-labelledby="mcTitle">
+  <div class="mcard">
+    <h2 id="mcTitle">🗂 我的人物 <button class="xbtn" type="button" data-close="myCharsModal" aria-label="關閉">✕</button></h2>
+    <p class="sub">存過的人物會出現在每張人物卡的「套用人物預設」選單。</p>
+    <ul class="hlist" id="myCharsList"></ul>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+
+<script>
+/* ================= 頂部跑馬燈 — 獨立運作，沿用工作區共用授權伺服器的公告內容 ================= */
+(function () {
+  'use strict';
+  var MARQUEE_CHECK_URL = "https://script.google.com/macros/s/AKfycbwKX0DNNbY8y4nf90BFTHtxgfqJcHHcZasRrgycl4QAe52_hkjMWSkYk4xOsqU-JPCROw/exec";
+  var STORAGE_KEY = 'comicPromptMarquee';
+  var REFRESH_MS = 20 * 60 * 1000;
+
+  var bar = document.getElementById('marqueeBar');
+  var track = document.getElementById('marqueeTrack');
+  var lastKey = null;
+
+  function loadCache() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function saveCache(items) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch (e) {}
+  }
+  function appendParsedText(container, text) {
+    var re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    var lastIndex = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > lastIndex) container.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+      var a = document.createElement('a');
+      a.href = m[2]; a.textContent = m[1]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.style.color = 'inherit'; a.style.textDecoration = 'underline';
+      container.appendChild(a);
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < text.length) container.appendChild(document.createTextNode(text.slice(lastIndex)));
+  }
+  function buildTrackContent(items) {
+    var frag = document.createDocumentFragment();
+    function appendPass() {
+      items.forEach(function (item, idx) {
+        if (idx > 0) frag.appendChild(document.createTextNode('　★　'));
+        appendParsedText(frag, item);
+      });
+    }
+    appendPass();
+    frag.appendChild(document.createTextNode('　★　'));
+    appendPass();
+    return frag;
+  }
+  function render(items) {
+    if (!items || !items.length) return;
+    var key = JSON.stringify(items);
+    if (key === lastKey) return;
+    lastKey = key;
+    track.innerHTML = '';
+    track.appendChild(buildTrackContent(items));
+    bar.classList.add('show');
+    document.body.classList.add('has-marquee');
+    var width = track.scrollWidth / 2;
+    track.style.animationDuration = Math.max(width / 80, 10) + 's';
+  }
+  function fetchMarquee() {
+    fetch(MARQUEE_CHECK_URL, { method: 'POST', body: JSON.stringify({ serial: '' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && Array.isArray(data.marquee) && data.marquee.length) {
+          saveCache(data.marquee);
+          render(data.marquee);
+        }
+      })
+      .catch(function () {});
+  }
+
+  render(loadCache());
+  fetchMarquee();
+  setInterval(fetchMarquee, REFRESH_MS);
+})();
+</script>
+<script>
+/* ================= 加入主畫面（PWA） ================= */
+(function () {
+  'use strict';
+  var deferredPrompt = null;
+  var btn = document.getElementById('installBtn');
+
+  var ua = navigator.userAgent || '';
+  var isIOSDevice = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isMacDesktop = /Macintosh/.test(ua) && !isIOSDevice;
+  var isSafariEngine = /^((?!chrome|crios|fxios|edgios|android).)*safari/i.test(ua);
+  var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+
+  function fallbackMessage() {
+    if (isIOSDevice) return '請點畫面上的「分享」圖示，選「加入主畫面」';
+    if (isMacDesktop && isSafariEngine) return '請用選單列「檔案」→「加入 Dock」（Safari 17 以上）';
+    return '瀏覽器不支援，或已安裝過';
+  }
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+  window.addEventListener('appinstalled', function () {
+    deferredPrompt = null;
+  });
+
+  if (btn) {
+    if (isStandalone) {
+      btn.style.display = 'none';
+    } else {
+      btn.addEventListener('click', function () {
+        if (!deferredPrompt) {
+          window.alert(fallbackMessage());
+          return;
+        }
+        try {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function () { deferredPrompt = null; });
+        } catch (err) {
+          window.alert(fallbackMessage());
+        }
+      });
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('service-worker.js').catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
