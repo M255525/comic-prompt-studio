@@ -24,7 +24,9 @@
 
   /* ================= 人物 ================= */
   function presetToChar(p) {
-    return { name: p.name, age: p.age, look: p.look, outfit: p.outfit, personality: p.personality, catchphrase: p.catchphrase, colors: p.colors, en: p.en || '' };
+    var c = { name: p.name, age: p.age, look: p.look, outfit: p.outfit, personality: p.personality, catchphrase: p.catchphrase, colors: p.colors, en: p.en || '' };
+    if (p.famous) c.famous = true;
+    return c;
   }
   function blankChar() { return { name: '', age: '', look: '', outfit: '', personality: '', catchphrase: '', colors: '', en: '' }; }
   function myChars() { return lsGet(LS.myChars, []); }
@@ -36,9 +38,10 @@
   }
   function charDescZh(c) {
     var parts = [];
+    if (c.famous) parts.push('知名卡通角色，請維持原作的經典造型');
     if (c.age) parts.push(c.age);
     if (c.look) parts.push('外型：' + c.look);
-    if (c.outfit) parts.push('服裝：' + c.outfit);
+    if (c.outfit && c.outfit !== '無') parts.push('服裝：' + c.outfit);
     if (c.personality) parts.push('個性：' + c.personality);
     if (c.colors) parts.push('代表配色：' + c.colors);
     return c.name + (parts.length ? '（' + parts.join('；') + '）' : '');
@@ -345,8 +348,10 @@
 
   function presetOptions(selected) {
     var mine = myChars();
-    var h = '<option value="">— 套用人物預設 —</option><optgroup label="預設人物">' +
-      D.CHARACTER_PRESETS.map(function (p) { return '<option value="p:' + p.id + '">' + esc(p.name + '｜' + p.age) + '</option>'; }).join('') + '</optgroup>';
+    var h = '<option value="">— 套用人物預設 —</option>' + D.PRESET_GROUPS.map(function (g) {
+      return '<optgroup label="' + g + '">' + D.CHARACTER_PRESETS.filter(function (p) { return p.group === g; })
+        .map(function (p) { return '<option value="p:' + p.id + '">' + esc(p.name + '｜' + p.age) + '</option>'; }).join('') + '</optgroup>';
+    }).join('');
     if (mine.length) h += '<optgroup label="我的人物">' + mine.map(function (c, i) { return '<option value="m:' + i + '">' + esc(c.name + (c.age ? '｜' + c.age : '')) + '</option>'; }).join('') + '</optgroup>';
     return h;
   }

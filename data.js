@@ -94,7 +94,7 @@ window.CPS = (function () {
   var EXPR_KEYWORDS = [
     ['laugh', /哈哈|笑死|爆笑|大笑|好好笑/],
     ['surprise', /什麼|竟然|居然|嚇|驚|！？|\?!|天啊|哇/],
-    ['angry', /生氣|氣死|怒|不爽|火大/],
+    ['angry', /生氣|氣死|氣得|怒|不爽|火大/],
     ['sad', /哭|難過|傷心|失落|眼淚|遺憾|垂頭喪氣/],
     ['worry', /擔心|煩|糟|怎麼辦|緊張|焦慮|完了|慌|打不開|一個客人都沒有/],
     ['tired', /累|加班|熬夜|好睏|疲/],
@@ -105,8 +105,36 @@ window.CPS = (function () {
     ['smile', /開心|謝謝|喜歡|好棒|溫暖|笑/]
   ];
 
-  // 8 組原創人物預設值
-  var CHARACTER_PRESETS = [
+  // 知名卡通人物（使用者 2026-10-29 指定為預設人物主選單；外型描述為自寫的簡短特徵，famous 會讓提示詞要求依原作造型）
+  var FAMOUS_PRESETS = [
+    { id: 'garfield', name: '加菲貓', age: '橘色虎斑胖貓', look: '圓滾滾的橘色身體、背上黑色條紋、半瞇的慵懶大眼、粉紅鼻子', outfit: '無', personality: '懶惰貪吃、討厭星期一、最愛千層麵', catchphrase: '「我討厭星期一。」', colors: '橘、黑',
+      en: 'Garfield, the fat lazy orange tabby cat with black stripes and half-closed sleepy eyes from the Garfield comic strip' },
+    { id: 'odie', name: '歐弟', age: '黃色小獵犬', look: '黃色短毛、棕色長垂耳、永遠吐著長長的舌頭', outfit: '無', personality: '傻呼呼、超級熱情、常被加菲貓捉弄', catchphrase: '「（流口水）汪！」', colors: '黃、棕',
+      en: 'Odie, the yellow beagle with long brown ears and a long dangling tongue from the Garfield comic strip' },
+    { id: 'snoopy', name: '史努比', age: '白色米格魯', look: '白色身體、黑色垂耳、黑色圓鼻子、常趴在紅色狗屋屋頂', outfit: '想像自己是飛行員時戴護目鏡與圍巾', personality: '愛幻想、樂天、自得其樂', catchphrase: '「（在狗屋上快樂跳舞）」', colors: '白、黑、紅',
+      en: 'Snoopy, the white beagle with black floppy ears from Peanuts, sometimes wearing aviator goggles and scarf' },
+    { id: 'charlie', name: '查理布朗', age: '小男孩', look: '圓圓的大頭、頭頂只有一小撮捲髮', outfit: '黃色上衣、胸前一圈黑色鋸齒條紋、黑短褲', personality: '老是運氣不好，但從不放棄', catchphrase: '「真是倒楣透了！」', colors: '黃、黑',
+      en: 'Charlie Brown from Peanuts, round head with a tiny curl of hair, yellow shirt with black zigzag stripe' },
+    { id: 'mickey', name: '米老鼠', age: '卡通老鼠', look: '黑色圓耳朵、大眼睛、燦爛笑容、細長尾巴', outfit: '白手套、紅色短褲配兩顆白鈕扣、大黃鞋', personality: '開朗樂觀、熱心勇敢', catchphrase: '「哈哈！嗨！」', colors: '黑、紅、黃',
+      en: 'Mickey Mouse with round black ears, white gloves, red shorts with two white buttons, big yellow shoes' },
+    { id: 'donald', name: '唐老鴨', age: '卡通鴨子', look: '白色羽毛、橘色扁嘴與蹼腳', outfit: '藍色水手服、黑色領結、藍色水手帽', personality: '脾氣急躁、一生氣就跳腳，其實很可愛', catchphrase: '「（嘎嘎大叫）氣死我了！」', colors: '白、藍、橘',
+      en: 'Donald Duck, white duck with orange bill and feet, blue sailor shirt and sailor hat' },
+    { id: 'pooh', name: '小熊維尼', age: '金黃色小熊', look: '圓滾滾的肚子、小圓耳、憨厚表情', outfit: '短短的紅色上衣、常抱著蜂蜜罐', personality: '慢條斯理、單純善良、最愛蜂蜜', catchphrase: '「我想吃一點點蜂蜜。」', colors: '金黃、紅',
+      en: 'Winnie the Pooh, golden yellow teddy bear in a short red shirt, holding a honey pot' },
+    { id: 'doraemon', name: '哆啦A夢', age: '貓型機器人', look: '藍白色圓圓身體、沒有耳朵、紅色圓鼻子、白色鬍鬚', outfit: '紅色項圈掛金色鈴鐺、肚子上白色四次元口袋', personality: '熱心助人、怕老鼠、最愛銅鑼燒', catchphrase: '「我有一個好東西！」', colors: '藍、白、紅、黃',
+      en: 'Doraemon, the round blue and white robot cat with no ears, red nose, red collar with golden bell, white pocket on belly' },
+    { id: 'pikachu', name: '皮卡丘', age: '電氣老鼠', look: '黃色圓胖身體、尖長耳朵末端黑色、紅色圓臉頰、閃電形尾巴', outfit: '無', personality: '活潑勇敢、很重感情', catchphrase: '「皮卡皮卡～」', colors: '黃、紅、黑',
+      en: 'Pikachu, yellow electric mouse with black-tipped ears, red cheeks and lightning bolt tail' },
+    { id: 'spongebob', name: '海綿寶寶', age: '方形海綿', look: '黃色方形身體、大大的藍眼睛、兩顆大門牙、雀斑', outfit: '白襯衫、紅領帶、棕色方形短褲、黑皮鞋', personality: '超級樂天、熱愛工作、有點天真', catchphrase: '「我準備好了！」', colors: '黃、棕、紅',
+      en: 'SpongeBob SquarePants, yellow square sponge with big blue eyes and buck teeth, white shirt, red tie, brown square pants' },
+    { id: 'kitty', name: '凱蒂貓', age: '白色小貓', look: '白色圓臉、沒有嘴巴、黑色小眼睛、黃色鼻子', outfit: '左耳戴紅色蝴蝶結、常穿藍色吊帶褲', personality: '溫柔可愛、喜歡交朋友', catchphrase: '（不說話，用表情和動作表達）', colors: '白、紅、藍',
+      en: 'Hello Kitty, white cartoon cat with no mouth and a red bow on her left ear, blue overalls' },
+    { id: 'shinchan', name: '蠟筆小新', age: '5 歲男孩', look: '馬鈴薯形臉、超粗的黑眉毛、圓眼睛', outfit: '紅色 T 恤、黃色短褲', personality: '調皮搞怪、愛耍寶、常讓大人頭痛', catchphrase: '「動感超人～動感光波！」', colors: '紅、黃',
+      en: 'Crayon Shin-chan, 5-year-old boy with potato-shaped face and very thick eyebrows, red t-shirt and yellow shorts' }
+  ].map(function (p) { p.group = '知名卡通人物'; p.famous = true; return p; });
+
+  // 8 組原創人物（範例故事使用）
+  var ORIGINAL_PRESETS = [
     { id: 'qing', name: '小晴', age: '26 歲女性', look: '黑色及肩短髮、齊瀏海、圓臉、大眼睛、臉頰淡淡紅暈', outfit: '米白色針織衫、淺藍牛仔褲、斜背帆布包、工作識別證', personality: '認真但容易緊張的小資上班族，心地善良', catchphrase: '「欸欸欸？真的假的！」', colors: '米白、淺藍、珊瑚粉',
       en: '26-year-old office woman, shoulder-length black bob with straight bangs, round face, big eyes, light blush, cream knit sweater, light blue jeans, canvas crossbody bag, employee ID badge' },
     { id: 'kai', name: '阿凱', age: '24 歲男性', look: '刺刺的短黑髮、濃眉、笑起來有虎牙、皮膚曬得黝黑', outfit: '深藍西裝外套、白襯衫、紅色領帶微歪、公事包', personality: '熱血衝動的新人業務，永遠充滿幹勁', catchphrase: '「交給我，包在我身上！」', colors: '深藍、白、紅',
@@ -123,7 +151,9 @@ window.CPS = (function () {
       en: 'chubby red Shiba Inu mascot dog, white eyebrow dots, curled tail, red collar with a golden bell, expressive human-like faces' },
     { id: 'pico', name: 'Pico', age: 'AI 小助理機器人', look: '圓頭圓身的白色小機器人、臉部是藍色螢幕顯示表情、頭頂一根天線', outfit: '胸前有橘色指示燈、會漂浮', personality: '聰明貼心但偶爾當機出錯的 AI 助理', catchphrase: '「資料分析完畢，嗶嗶！」', colors: '白、電光藍、橘',
       en: 'small round white floating robot assistant, blue screen face showing emoji expressions, single antenna on head, orange indicator light on chest' }
-  ];
+  ].map(function (p) { p.group = '原創人物'; return p; });
+
+  var CHARACTER_PRESETS = FAMOUS_PRESETS.concat(ORIGINAL_PRESETS);
 
   var EXAMPLES = [
     { id: 'office', title: '職場小故事', mood: 'funny', chars: ['qing', 'lin'], text:
@@ -151,6 +181,6 @@ window.CPS = (function () {
   return {
     STYLES: STYLES, PANEL_COUNTS: PANEL_COUNTS, LAYOUTS: LAYOUTS, RATIOS: RATIOS, COLORS: COLORS,
     LANGS: LANGS, BUBBLES: BUBBLES, MOODS: MOODS, DIRECTIONS: DIRECTIONS, SHOTS: SHOTS,
-    EXPRESSIONS: EXPRESSIONS, EXPR_KEYWORDS: EXPR_KEYWORDS, CHARACTER_PRESETS: CHARACTER_PRESETS, EXAMPLES: EXAMPLES
+    EXPRESSIONS: EXPRESSIONS, EXPR_KEYWORDS: EXPR_KEYWORDS, CHARACTER_PRESETS: CHARACTER_PRESETS, PRESET_GROUPS: ['知名卡通人物', '原創人物'], EXAMPLES: EXAMPLES
   };
 })();
