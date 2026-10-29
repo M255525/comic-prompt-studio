@@ -178,6 +178,27 @@ window.CPS = (function () {
       '小晴在家開線上會議，正在向林姐報告這季業績。\n她說得正起勁：「我們的成長率是——」\n豆皮突然跳上桌，整個大屁股擋住了鏡頭。\n林姐忍著笑說：「看來豆皮也想加薪。」' }
   ];
 
+  // 內容風格：管「文字怎麼寫」（腳本動作／台詞語氣、AI 寫作與潤飾），和管畫面氛圍的 MOODS 分開。
+  // v＝規則式腳本的動作用語（煩惱／開講／講重點／收尾），pre/tail 加在收尾台詞前後；vzh/ven 寫進生圖提示詞
+  var TONES = [
+    { id: 'standard', zh: '一般自然', desc: '自然口語、清楚易懂', vzh: '', ven: '',
+      v: { worry: '抱著頭煩惱', present: '拿出白板說', point: '指著白板說', happy: '恍然大悟地說' }, pre: '原來', tail: '！' },
+    { id: 'pro', zh: '專業嚴謹', desc: '用詞精準專業、條理分明、像企業內訓或顧問簡報，不搞笑', vzh: '專業簡報感、角色神情認真、畫面整潔', ven: 'professional presentation feel, serious focused expressions, clean composition',
+      v: { worry: '皺著眉看著報表問', present: '打開簡報說明', point: '用雷射筆指著圖表說', happy: '點頭做筆記說' }, pre: '結論是：', tail: '。' },
+    { id: 'humor', zh: '幽默有趣', desc: '輕鬆搞笑、誇張反應、有梗有笑點，最後一格要有反轉或笑點', vzh: '誇張逗趣的表情與動作、搞笑漫畫效果線', ven: 'exaggerated comedic expressions and poses, gag manga effects',
+      v: { worry: '抓狂地在地上打滾大喊', present: '戴上墨鏡帥氣登場說', point: '拿著逗貓棒指著白板說', happy: '感動到噴淚大喊' }, pre: '原來', tail: '！我變聰明了！' },
+    { id: 'warm', zh: '溫馨感性', desc: '溫柔體貼、有陪伴感、帶一點感動', vzh: '柔和暖色光線、溫柔的表情', ven: 'soft warm lighting, gentle tender expressions',
+      v: { worry: '低著頭小聲地說', present: '溫柔地拍拍肩膀說', point: '耐心地一項一項說明', happy: '露出安心的笑容說' }, pre: '原來', tail: '，謝謝你。' },
+    { id: 'hot', zh: '熱血勵志', desc: '充滿幹勁、激勵人心、語氣有力量', vzh: '熱血少年漫畫氣勢、集中線與火焰特效', ven: 'hot-blooded energy, focus lines and flame effects',
+      v: { worry: '握緊拳頭不甘心地說', present: '燃起鬥志大聲說', point: '揮舞拳頭指著白板喊', happy: '眼中燃起火焰喊道' }, pre: '好！', tail: '！衝啊！' },
+    { id: 'cute', zh: '可愛童趣', desc: '可愛童趣、用字簡單、適合小朋友，多用狀聲詞', vzh: '圓潤可愛的造型、粉嫩色彩、閃亮小星星', ven: 'cute rounded designs, pastel colors, little sparkles',
+      v: { worry: '嘟著嘴歪頭問', present: '蹦蹦跳跳地拿出圖卡說', point: '用彩色筆邊畫邊說', happy: '開心地轉圈圈說' }, pre: '哇～原來', tail: '耶！' },
+    { id: 'concise', zh: '簡潔俐落', desc: '句子極短、重點先講、不囉嗦', vzh: '簡潔構圖、留白多', ven: 'minimal composition, generous white space',
+      v: { worry: '問', present: '說', point: '指著白板', happy: '點頭' }, pre: '懂了：', tail: '。' },
+    { id: 'sarcastic', zh: '吐槽反差', desc: '毒舌吐槽、反差萌，嘴上嫌棄但其實很受用', vzh: '冷眼、翻白眼等反差表情', ven: 'deadpan and eye-rolling reaction faces',
+      v: { worry: '翻白眼吐槽', present: '一臉嫌棄地說', point: '冷冷地指著白板說', happy: '嘴硬地說' }, pre: '哼，', tail: '……好啦，是有點用。' }
+  ];
+
   // 主題生腳本：腳本類型與內建主題。points 為 [標籤, 預設情境的具體例子, 自訂情境時用的通用說法]，{ctx} 會換成舉例情境
   var SCRIPT_TYPES = [
     { id: 'knowledge', zh: '知識講解', mood: 'edu' },
@@ -223,6 +244,6 @@ window.CPS = (function () {
     STYLES: STYLES, PANEL_COUNTS: PANEL_COUNTS, LAYOUTS: LAYOUTS, RATIOS: RATIOS, COLORS: COLORS,
     LANGS: LANGS, BUBBLES: BUBBLES, MOODS: MOODS, DIRECTIONS: DIRECTIONS, SHOTS: SHOTS,
     EXPRESSIONS: EXPRESSIONS, EXPR_KEYWORDS: EXPR_KEYWORDS, CHARACTER_PRESETS: CHARACTER_PRESETS, PRESET_GROUPS: ['知名卡通人物', '原創人物'], EXAMPLES: EXAMPLES,
-    SCRIPT_TYPES: SCRIPT_TYPES, TOPICS: TOPICS, GENERIC_TOPIC: GENERIC_TOPIC
+    TONES: TONES, SCRIPT_TYPES: SCRIPT_TYPES, TOPICS: TOPICS, GENERIC_TOPIC: GENERIC_TOPIC
   };
 })();

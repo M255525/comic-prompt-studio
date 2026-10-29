@@ -12,12 +12,12 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', aiProvider: 'gemini', aiModel: '', aiModelCustom: '', aiBase: '', aiKey: '' };
+  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', tone: 'standard', aiProvider: 'gemini', aiModel: '', aiModelCustom: '', aiBase: '', aiKey: '' };
   var prefs = Object.assign({}, PREF_DEFAULTS, lsGet(LS.prefs, {}));
 
   function defaultSettings() {
     return { style: prefs.style, panels: +prefs.panels, layout: prefs.layout, ratio: prefs.ratio, color: prefs.color, lang: prefs.lang,
-      bubble: 'round', mood: 'funny', dir: 'ltr', shotMode: 'auto', sfx: true, genMode: 'page' };
+      bubble: 'round', mood: 'funny', tone: prefs.tone || 'standard', dir: 'ltr', shotMode: 'auto', sfx: true, genMode: 'page' };
   }
 
   function defaultTopic() { return { tab: 'text', text: '', type: 'knowledge', ctx: '', a: '', b: '' }; }
@@ -192,7 +192,7 @@
   function opt() {
     var s = state.settings;
     return { s: s, style: byId(D.STYLES, s.style), layout: byId(D.LAYOUTS, s.layout), color: byId(D.COLORS, s.color), lang: byId(D.LANGS, s.lang),
-      bubble: byId(D.BUBBLES, s.bubble), mood: byId(D.MOODS, s.mood), dir: byId(D.DIRECTIONS, s.dir), chars: activeChars(), panels: state.panels };
+      bubble: byId(D.BUBBLES, s.bubble), mood: byId(D.MOODS, s.mood), tone: byId(D.TONES, s.tone), dir: byId(D.DIRECTIONS, s.dir), chars: activeChars(), panels: state.panels };
   }
   function panelChars(p, chars) {
     var names = (p.chars || '').split(/[、,，\s]+/).filter(Boolean);
@@ -226,7 +226,7 @@
 
   function buildGemini(o) {
     var n = o.panels.length;
-    var head = '【整體風格】' + o.style.zhDesc + '；' + o.color.zhDesc + '；情緒基調：' + o.mood.zhDesc + '。\n';
+    var head = '【整體風格】' + o.style.zhDesc + '；' + o.color.zhDesc + '；情緒基調：' + o.mood.zhDesc + (o.tone.vzh ? '；內容風格：' + o.tone.zh + '（' + o.tone.vzh + '）' : '') + '。\n';
     if (o.s.genMode === 'each') {
       var intro = '（逐格生成：請依序送出以下 ' + n + ' 段提示詞，每段生成一張；從第 2 格起可把第 1 格成品一起上傳當作角色參考圖，維持角色一致。）\n\n';
       return intro + o.panels.map(function (p, i) {
@@ -243,7 +243,7 @@
   function buildChatGPT(o) {
     var n = o.panels.length;
     function styleSec() {
-      return '## 風格\n- 畫風：' + o.style.zhDesc + '\n- 色彩：' + o.color.zhDesc + '\n- 情緒基調：' + o.mood.zhDesc + '\n';
+      return '## 風格\n- 畫風：' + o.style.zhDesc + '\n- 色彩：' + o.color.zhDesc + '\n- 情緒基調：' + o.mood.zhDesc + '\n' + (o.tone.vzh ? '- 內容風格：' + o.tone.zh + '（' + o.tone.vzh + '）\n' : '');
     }
     function charSec() {
       if (!o.chars.length) return '';
@@ -288,11 +288,11 @@
     }).join('\n');
     if (o.s.genMode === 'each') {
       return o.panels.map(function (p, i) {
-        return '/imagine prompt: single comic panel, ' + o.style.en + ', ' + o.color.en + ', ' + o.mood.en + ' mood, ' + panelEn(p, o) + params;
+        return '/imagine prompt: single comic panel, ' + o.style.en + ', ' + o.color.en + ', ' + o.mood.en + ' mood, ' + (o.tone.ven ? o.tone.ven + ', ' : '') + panelEn(p, o) + params;
       }).join('\n\n') + tail;
     }
     var chars = o.chars.length ? ' Characters: ' + o.chars.map(charDescEn).join('; ') + '.' : '';
-    return '/imagine prompt: ' + n + '-panel comic page, ' + o.layout.en + ', clear white gutters, ' + o.style.en + ', ' + o.color.en + ', ' + o.mood.en + ' mood.' + chars + ' ' +
+    return '/imagine prompt: ' + n + '-panel comic page, ' + o.layout.en + ', clear white gutters, ' + o.style.en + ', ' + o.color.en + ', ' + o.mood.en + ' mood' + (o.tone.ven ? ', ' + o.tone.ven : '') + '.' + chars + ' ' +
       o.panels.map(function (p, i) { return 'Panel ' + (i + 1) + ': ' + panelEn(p, o, true); }).join('. ') + '.' + params + tail;
   }
 
@@ -302,6 +302,7 @@
     out += '【風格 Style】' + o.style.zhDesc + '\n  ' + o.style.en + '\n';
     out += '【色彩 Color】' + o.color.zhDesc + '／' + o.color.en + '\n';
     out += '【基調 Mood】' + o.mood.zhDesc + '／' + o.mood.en + '\n';
+    if (o.tone.vzh) out += '【內容風格 Tone】' + o.tone.zh + '：' + o.tone.vzh + '／' + o.tone.ven + '\n';
     out += '【版面 Layout】' + o.layout.zhDesc + '，比例 ' + o.s.ratio + '，' + o.dir.zhDesc + '\n  ' + o.layout.en + ', aspect ratio ' + o.s.ratio + ', ' + o.dir.en + '\n';
     if (o.chars.length) out += '\n【角色 Characters — keep consistent in every panel】\n' + o.chars.map(function (c) { return '- ' + charDescZh(c) + '\n  ' + charDescEn(c); }).join('\n') + '\n';
     out += '\n【分鏡 Panels】\n' + o.panels.map(function (p, i) {
@@ -342,6 +343,7 @@
     fillSelect($('optLang'), D.LANGS, s.lang);
     fillSelect($('optBubble'), D.BUBBLES, s.bubble);
     fillSelect($('optMood'), D.MOODS, s.mood);
+    fillSelect($('optTone'), D.TONES, s.tone);
     fillSelect($('optDir'), D.DIRECTIONS, s.dir);
     $('optSfx').checked = !!s.sfx;
     $('topicPanels').textContent = s.panels;
@@ -528,20 +530,21 @@
     var pts = t.points.map(function (p) { return { label: p[0], ex: fill(custom || !tp ? p[2] : p[1]) }; });
     var r = topicRoles(), A = r.a, B = r.b, type = state.topic.type;
     var goal = fill(t.goal), one = fill(t.one), end = fill(t.end);
+    var tn = byId(D.TONES, state.settings.tone), tv = tn.v, fin = function (x) { return tn.pre + x + tn.tail; };
     // 內建框架說「用 SWOT 分析」；不認得的主題（例如區塊鏈）改說「先搞懂區塊鏈」
     var useT = tp ? '用' + T : '先搞懂' + T, tryT = tp ? '試試' + T : '先搞懂' + T;
     function ptsText(g) {
       return g.length <= 2 ? g.map(function (p) { return p.label + '：' + p.ex; }).join('；') : g.map(function (p) { return p.label; }).join('、') + '，一項一項來';
     }
     var L = {
-      knowledge: { hook: '在教室裡，' + B + '抱著頭煩惱：「' + goal + '？」', intro: A + '拿出白板說：「' + useT + '！' + one + '。」',
-        mid: function (g) { return A + '指著白板說：「' + ptsText(g) + '。」'; }, end: B + '恍然大悟地說：「原來' + end + '！」',
+      knowledge: { hook: '在教室裡，' + B + tv.worry + '：「' + goal + '？」', intro: A + tv.present + '：「' + useT + '！' + one + '。」',
+        mid: function (g) { return A + tv.point + '：「' + ptsText(g) + '。」'; }, end: B + tv.happy + '：「' + fin(end) + '」',
         ask: '在教室裡，' + B + '問' + A + '：「' + goal + '？」' },
       story: { hook: B + '在' + ctx + '前面嘆氣：「' + goal + '……」', intro: A + '走過來說：「' + tryT + '吧，' + one + '。」',
-        mid: function (g) { return B + '照著做，在筆記本寫下：「' + ptsText(g) + '。」'; }, end: '最後，' + B + '開心地對' + A + '說：「' + end + '，真的有用！」',
+        mid: function (g) { return B + '照著做，在筆記本寫下：「' + ptsText(g) + '。」'; }, end: '最後，' + B + tv.happy + '：「' + end + '，真的有用' + tn.tail + '」',
         ask: B + '向' + A + '求救：「' + goal + '？」' },
       qa: { hook: '在教室裡，' + B + '舉手問：「' + T + '是什麼？」', intro: A + '回答：「' + one + '。」',
-        mid: function (g) { return A + '回答' + B + '的追問：「' + ptsText(g) + '。」'; }, end: B + '點點頭說：「懂了，' + end + '！」',
+        mid: function (g) { return A + '回答' + B + '的追問：「' + ptsText(g) + '。」'; }, end: B + tv.happy + '：「' + fin(end) + '」',
         ask: '在教室裡，' + B + '舉手問：「' + T + '是什麼？」' },
       contrast: { hook: '在辦公室裡，' + B + '什麼都沒想就直接開做，結果一團亂：「怎麼會這樣！」', intro: A + '搖搖頭說：「' + (tp ? '先用' + T + '想一遍' : '先搞懂' + T) + '：' + one + '。」',
         mid: function (g) { return B + '重新來過，先想清楚：「' + ptsText(g) + '。」'; }, end: '這次' + B + '順利成功，比出勝利手勢：「早知道就' + (tp ? '先用' + T : '先搞懂' + T) + '！」',
@@ -550,7 +553,7 @@
     var lines = [];
     if (n <= 2) {
       lines.push(L.ask);
-      lines.push(A + '笑著說：「' + useT + '：' + pts.map(function (p) { return p.label; }).join('、') + '！」' + B + '恍然大悟。');
+      lines.push(A + tv.present + '：「' + useT + '：' + pts.map(function (p) { return p.label; }).join('、') + '！」' + B + '恍然大悟。');
       return lines.join('\n');
     }
     var mids;
@@ -571,7 +574,7 @@
     var ca = activeChars().filter(function (c) { return c.name === r.a; })[0] || {}, cb = activeChars().filter(function (c) { return c.name === r.b; })[0] || {};
     var type = byId(D.SCRIPT_TYPES, state.topic.type).zh;
     return '你是擅長把知識畫成漫畫的編劇。請用剛好 ' + n + ' 格的短篇漫畫，向一般大眾解釋「' + cleanTopic(state.topic.text) + '」。\n' + '（使用者原始需求：' + state.topic.text.trim() + '）\n' +
-      '腳本類型：' + type + '\n講解者：' + r.a + (ca.personality ? '（' + ca.personality + '）' : '') + '\n提問者／主角：' + r.b + (cb.personality ? '（' + cb.personality + '）' : '') + '\n' +
+      '腳本類型：' + type + '\n內容風格：' + byId(D.TONES, state.settings.tone).zh + '——' + byId(D.TONES, state.settings.tone).desc + '\n講解者：' + r.a + (ca.personality ? '（' + ca.personality + '）' : '') + '\n提問者／主角：' + r.b + (cb.personality ? '（' + cb.personality + '）' : '') + '\n' +
       (state.topic.ctx.trim() ? '舉例情境：' + state.topic.ctx.trim() + '\n' : '') +
       '規則：\n- 剛好 ' + n + ' 行，每行是一格\n- 每行格式：角色名稱＋動作描述：「對白」（每行都要寫出角色名稱，不要用他／她代替）\n- 對白用繁體中文口語，每句 25 字以內\n- 內容要正確，重點講清楚，不要杜撰數據\n- 第一格提出問題或情境，最後一格要有總結或小笑點\n- 只輸出 ' + n + ' 行腳本，不要編號、標題或任何說明';
   }
@@ -682,7 +685,7 @@
 
   function aiPrompt() {
     var n = state.settings.panels, chars = activeChars();
-    return '你是專業漫畫分鏡師。請把下面的故事改編成剛好 ' + n + ' 格的短篇漫畫分鏡，情緒基調：' + byId(D.MOODS, state.settings.mood).zhDesc + '，要有起承轉合與最後一格的笑點或收尾。\n' +
+    return '你是專業漫畫分鏡師。請把下面的故事改編成剛好 ' + n + ' 格的短篇漫畫分鏡，情緒基調：' + byId(D.MOODS, state.settings.mood).zhDesc + '，要有起承轉合與最後一格的笑點或收尾。\n' + '內容風格：' + byId(D.TONES, state.settings.tone).zh + '——' + byId(D.TONES, state.settings.tone).desc + '（畫面動作與對白都要符合這個風格）\n' +
       '登場角色：' + (chars.length ? chars.map(function (c) { return c.name + (c.personality ? '（' + c.personality + '）' : ''); }).join('、') : '依故事自行判斷') + '\n' +
       '只輸出 JSON 陣列（不要 Markdown、不要說明），長度剛好 ' + n + '，每個元素格式：\n' +
       '{"scene":"中文場景（含時間地點）","scene_en":"English scene","action":"中文畫面動作描述，一到兩句，具體可畫","action_en":"English visual action description",' +
@@ -738,7 +741,7 @@
       '- 角色的外型、服裝、配色描述要完整保留，並維持「每一格角色外觀一致」的要求\n' +
       '- 引號「」裡的對白與音效字一字不改\n' +
       '- 圖片比例、畫風、色彩、閱讀方向、文字要求（不要錯字／浮水印）都要保留\n' +
-      '- 可以補充構圖、背景、光線、肢體動作與表情等畫面細節，讓每一格更生動\n' +
+      '- 可以補充構圖、背景、光線、肢體動作與表情等畫面細節，讓每一格更生動\n' + '- 整體文字與畫面描述的內容風格：' + o.tone.zh + '——' + o.tone.desc + '\n' +
       '- 輸出格式：' + POLISH_FORMAT[state.platform] + '\n' +
       '- 只輸出改寫後的提示詞本身，不要任何前言、說明或 ``` 符號\n\n原始提示詞：\n"""\n' + raw + '\n"""';
   }
@@ -780,6 +783,7 @@
     fillSelect($('setLayout'), D.LAYOUTS, prefs.layout);
     fillSelect($('setColor'), D.COLORS, prefs.color);
     fillSelect($('setLang'), D.LANGS, prefs.lang);
+    fillSelect($('setTone'), D.TONES, prefs.tone);
     $('setTheme').value = prefs.theme;
     $('setAiProvider').innerHTML = Object.keys(PROVIDERS).map(function (k) { return '<option value="' + k + '"' + (k === prefs.aiProvider ? ' selected' : '') + '>' + PROVIDERS[k].label + '</option>'; }).join('');
     renderProviderModels();
@@ -789,7 +793,7 @@
   }
   function saveSettings() {
     prefs.platform = $('setPlatform').value; prefs.style = $('setStyle').value; prefs.panels = +$('setPanels').value;
-    prefs.ratio = $('setRatio').value; prefs.layout = $('setLayout').value; prefs.color = $('setColor').value; prefs.lang = $('setLang').value;
+    prefs.ratio = $('setRatio').value; prefs.layout = $('setLayout').value; prefs.color = $('setColor').value; prefs.lang = $('setLang').value; prefs.tone = $('setTone').value;
     prefs.theme = $('setTheme').value; prefs.aiProvider = $('setAiProvider').value; prefs.aiModel = $('setAiModel').value; prefs.aiKey = $('setAiKey').value.trim();
     prefs.aiModelCustom = $('setAiModelCustom').value.trim(); prefs.aiBase = $('setAiBase').value.trim();
     lsSet(LS.prefs, prefs); applyTheme();
@@ -854,7 +858,7 @@
     $('btnAiStoryboard').addEventListener('click', function () { if (!routeTopic(true)) aiStoryboard(); });
     $('btnClear').addEventListener('click', function () { state.text = ''; $('srcText').value = ''; updateTextCount(); saveDraft(); $('srcText').focus(); });
 
-    var map = { optStyle: 'style', optLayout: 'layout', optRatio: 'ratio', optColor: 'color', optLang: 'lang', optBubble: 'bubble', optMood: 'mood', optDir: 'dir' };
+    var map = { optTone: 'tone', optStyle: 'style', optLayout: 'layout', optRatio: 'ratio', optColor: 'color', optLang: 'lang', optBubble: 'bubble', optMood: 'mood', optDir: 'dir' };
     Object.keys(map).forEach(function (id) { $(id).addEventListener('change', function () { state.settings[map[id]] = this.value; renderOutput(); saveDraft(); }); });
     $('optPanels').addEventListener('change', function () { state.settings.panels = +this.value; storyboard(true); });
     $('optSfx').addEventListener('change', function () { state.settings.sfx = this.checked; if (state.text.trim() && !state.edited) storyboard(true); else { renderOutput(); saveDraft(); } });
@@ -947,7 +951,7 @@
     $('settingsSave').addEventListener('click', function () { saveSettings(); closeModal('settings'); toast('已儲存常用設定（新專案會套用）'); });
     $('settingsApply').addEventListener('click', function () {
       saveSettings();
-      Object.assign(state.settings, { style: prefs.style, panels: +prefs.panels, ratio: prefs.ratio, layout: prefs.layout, color: prefs.color, lang: prefs.lang });
+      Object.assign(state.settings, { tone: prefs.tone, style: prefs.style, panels: +prefs.panels, ratio: prefs.ratio, layout: prefs.layout, color: prefs.color, lang: prefs.lang });
       state.platform = prefs.platform; renderSettings(); renderTabs(); storyboard(true); closeModal('settings'); toast('已儲存並套用到目前專案');
     });
     $('settingsReset').addEventListener('click', function () { prefs = Object.assign({}, PREF_DEFAULTS, { aiKey: prefs.aiKey, aiProvider: prefs.aiProvider, aiModel: prefs.aiModel, aiModelCustom: prefs.aiModelCustom, aiBase: prefs.aiBase }); lsSet(LS.prefs, prefs); applyTheme(); openSettings(); toast('已恢復預設（AI 連線設定保留）'); });
