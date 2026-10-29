@@ -12,7 +12,7 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', aiProvider: 'gemini', aiModel: '', aiKey: '' };
+  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', aiProvider: 'gemini', aiModel: '', aiModelCustom: '', aiBase: '', aiKey: '' };
   var prefs = Object.assign({}, PREF_DEFAULTS, lsGet(LS.prefs, {}));
 
   function defaultSettings() {
@@ -20,7 +20,8 @@
       bubble: 'round', mood: 'funny', dir: 'ltr', shotMode: 'auto', sfx: true, genMode: 'page' };
   }
 
-  var state = { text: '', settings: defaultSettings(), chars: [], panels: [], platform: prefs.platform, edited: false };
+  function defaultTopic() { return { tab: 'text', text: '', type: 'knowledge', ctx: '', a: '', b: '' }; }
+  var state = { text: '', settings: defaultSettings(), chars: [], panels: [], platform: prefs.platform, edited: false, topic: defaultTopic() };
 
   /* ================= 人物 ================= */
   function presetToChar(p) {
@@ -343,6 +344,7 @@
     fillSelect($('optMood'), D.MOODS, s.mood);
     fillSelect($('optDir'), D.DIRECTIONS, s.dir);
     $('optSfx').checked = !!s.sfx;
+    $('topicPanels').textContent = s.panels;
     document.querySelectorAll('input[name="genMode"]').forEach(function (r) { r.checked = r.value === s.genMode; });
   }
 
@@ -376,6 +378,7 @@
     }).join('') || '<p class="empty">還沒有登場人物。按下方「＋ 新增人物」，或從預設人物挑一位。</p>';
     $('btnAddChar').disabled = state.chars.length >= MAX_CHARS;
     $('charCount').textContent = state.chars.length + ' / ' + MAX_CHARS;
+    renderTopicChars();
   }
 
   function renderPanels() {
@@ -413,16 +416,16 @@
     $('promptLen').textContent = txt.length + ' 字';
   }
 
-  function renderAll() { renderSettings(); renderChars(); renderPanels(); renderTabs(); renderOutput(); $('srcText').value = state.text; updateTextCount(); }
+  function renderAll() { renderSettings(); renderChars(); renderPanels(); renderTabs(); renderOutput(); $('srcText').value = state.text; updateTextCount(); renderTopic(); }
   function updateTextCount() { $('textCount').textContent = state.text.length + ' 字'; }
 
   /* ================= 儲存 ================= */
   var draftTimer = null;
   function saveDraft() {
     clearTimeout(draftTimer);
-    draftTimer = setTimeout(function () { lsSet(LS.draft, { text: state.text, settings: state.settings, chars: state.chars, panels: state.panels, platform: state.platform }); }, 300);
+    draftTimer = setTimeout(function () { lsSet(LS.draft, snapshot()); }, 300);
   }
-  function snapshot() { return { app: 'comic-prompt-studio', version: 1, text: state.text, settings: state.settings, chars: state.chars, panels: state.panels, platform: state.platform }; }
+  function snapshot() { return { app: 'comic-prompt-studio', version: 1, text: state.text, settings: state.settings, chars: state.chars, panels: state.panels, platform: state.platform, topic: state.topic }; }
   function applySnapshot(d) {
     if (!d || typeof d !== 'object') throw new Error('格式不正確');
     state.text = String(d.text || '');
@@ -430,6 +433,7 @@
     state.chars = Array.isArray(d.chars) ? d.chars.slice(0, MAX_CHARS).map(function (c) { return Object.assign(blankChar(), c); }) : [];
     state.panels = Array.isArray(d.panels) ? d.panels.map(function (p) { return Object.assign(blankPanel(0, 1), p); }) : [];
     if (d.platform) state.platform = d.platform;
+    state.topic = Object.assign(defaultTopic(), d.topic || {});
     renderAll(); saveDraft();
   }
   function pushHistory() {
@@ -464,13 +468,175 @@
     toast('已載入範例「' + ex.title + '」');
   }
 
+  /* ================= 主題生腳本 ================= */
+  var REQUEST_RE = /請|幫我|麻煩|可以|能不能|用漫畫|畫成漫畫|做成漫畫|漫畫|解釋一下|解釋|說明一下|說明|介紹一下|介紹|教我|告訴我|講解|(甚|什)麼是|是(甚|什)麼|的意思|怎麼用|如何使用|[？?！!。，,\s]/g;
+  // 「請解釋甚麼是 swot 分析？」→「swot 分析」
+  function cleanTopic(text) {
+    var core = text.replace(REQUEST_RE, ' ').replace(/\s+/g, ' ').trim();
+    return core || text.trim();
+  }
+  // 輸入故事框裡只有一句「請解釋…」這類請求時，視為主題而不是故事
+  function looksLikeTopicRequest(text) {
+    var t = text.trim();
+    return t.length > 0 && t.length <= 40 && t.indexOf('\n') < 0 && !/[「“"]/.test(t) &&
+      (/解釋|說明|介紹|教我|講解|(甚|什)麼是|是(甚|什)麼|的意思|怎麼用/.test(t) || !!findTopic(t));
+  }
+  function findTopic(text) {
+    var k = text.toLowerCase().replace(/\s+/g, '');
+    for (var i = 0; i < D.TOPICS.length; i++) {
+      var t = D.TOPICS[i];
+      if (t.keys.some(function (key) { return k.indexOf(key) >= 0; })) return t;
+    }
+    return null;
+  }
+  // 講解者／提問者不足兩位時，自動補原創人物 Pico（講解）與小米（提問）
+  function ensureTopicChars() {
+    var added = [];
+    ['pico', 'mi'].forEach(function (id) {
+      if (activeChars().length >= 2 || state.chars.length >= MAX_CHARS) return;
+      var p = byId(D.CHARACTER_PRESETS, id);
+      if (activeChars().some(function (c) { return c.name === p.name; })) return;
+      state.chars.push(presetToChar(p)); added.push(p.name);
+    });
+    if (added.length) { renderChars(); toast('已自動加入登場人物：' + added.join('、')); }
+  }
+  function topicRoles() {
+    ensureTopicChars();
+    var names = activeChars().map(function (c) { return c.name; });
+    var a = names.indexOf(state.topic.a) >= 0 ? state.topic.a : names[0] || '老師';
+    var b = names.indexOf(state.topic.b) >= 0 && state.topic.b !== a ? state.topic.b : (names.filter(function (n) { return n !== a; })[0] || a);
+    return { a: a, b: b };
+  }
+
+  function ruleScript() {
+    var raw = state.topic.text.trim(), n = state.settings.panels;
+    var tp = findTopic(raw), custom = !!state.topic.ctx.trim();
+    var t = tp || D.GENERIC_TOPIC, T = tp ? tp.title : cleanTopic(raw);
+    var ctx = state.topic.ctx.trim() || t.ctx;
+    function fill(s) { return s.replace(/\{ctx\}/g, ctx).replace(/\{T\}/g, T); }
+    var pts = t.points.map(function (p) { return { label: p[0], ex: fill(custom || !tp ? p[2] : p[1]) }; });
+    var r = topicRoles(), A = r.a, B = r.b, type = state.topic.type;
+    var goal = fill(t.goal), one = fill(t.one), end = fill(t.end);
+    // 內建框架說「用 SWOT 分析」；不認得的主題（例如區塊鏈）改說「先搞懂區塊鏈」
+    var useT = tp ? '用' + T : '先搞懂' + T, tryT = tp ? '試試' + T : '先搞懂' + T;
+    function ptsText(g) {
+      return g.length <= 2 ? g.map(function (p) { return p.label + '：' + p.ex; }).join('；') : g.map(function (p) { return p.label; }).join('、') + '，一項一項來';
+    }
+    var L = {
+      knowledge: { hook: '在教室裡，' + B + '抱著頭煩惱：「' + goal + '？」', intro: A + '拿出白板說：「' + useT + '！' + one + '。」',
+        mid: function (g) { return A + '指著白板說：「' + ptsText(g) + '。」'; }, end: B + '恍然大悟地說：「原來' + end + '！」',
+        ask: '在教室裡，' + B + '問' + A + '：「' + goal + '？」' },
+      story: { hook: B + '在' + ctx + '前面嘆氣：「' + goal + '……」', intro: A + '走過來說：「' + tryT + '吧，' + one + '。」',
+        mid: function (g) { return B + '照著做，在筆記本寫下：「' + ptsText(g) + '。」'; }, end: '最後，' + B + '開心地對' + A + '說：「' + end + '，真的有用！」',
+        ask: B + '向' + A + '求救：「' + goal + '？」' },
+      qa: { hook: '在教室裡，' + B + '舉手問：「' + T + '是什麼？」', intro: A + '回答：「' + one + '。」',
+        mid: function (g) { return A + '回答' + B + '的追問：「' + ptsText(g) + '。」'; }, end: B + '點點頭說：「懂了，' + end + '！」',
+        ask: '在教室裡，' + B + '舉手問：「' + T + '是什麼？」' },
+      contrast: { hook: '在辦公室裡，' + B + '什麼都沒想就直接開做，結果一團亂：「怎麼會這樣！」', intro: A + '搖搖頭說：「' + (tp ? '先用' + T + '想一遍' : '先搞懂' + T) + '：' + one + '。」',
+        mid: function (g) { return B + '重新來過，先想清楚：「' + ptsText(g) + '。」'; }, end: '這次' + B + '順利成功，比出勝利手勢：「早知道就' + (tp ? '先用' + T : '先搞懂' + T) + '！」',
+        ask: '在辦公室裡，' + B + '搞砸了來問' + A + '：「我哪裡做錯了？」' }
+    }[type] || null;
+    var lines = [];
+    if (n <= 2) {
+      lines.push(L.ask);
+      lines.push(A + '笑著說：「' + useT + '：' + pts.map(function (p) { return p.label; }).join('、') + '！」' + B + '恍然大悟。');
+      return lines.join('\n');
+    }
+    var mids;
+    if (n === 3) { lines.push(L.ask); mids = 1; }
+    else { lines.push(L.hook); lines.push(L.intro); mids = n - 3; }
+    // 通用主題的標籤本身沒內容，格數不夠時只挑前兩個重點並寫出說明
+    if (!tp) pts = pts.slice(0, Math.max(2, mids * 2));
+    var groups = [], used = Math.min(mids, pts.length);
+    for (var i = 0; i < used; i++) groups.push(pts.slice(Math.floor(i * pts.length / used), Math.floor((i + 1) * pts.length / used)));
+    groups.forEach(function (g) { lines.push(n === 3 ? A + '說：「' + useT + '！' + ptsText(g) + '。」' : L.mid(g)); });
+    for (var k = used; k < mids; k++) lines.push(k === used ? B + '拿起筆，把學到的套到' + ctx + '上試試看。' : A + '在一旁比讚，' + B + '越做越順手。');
+    lines.push(L.end);
+    return lines.join('\n');
+  }
+
+  function aiScriptPrompt() {
+    var n = state.settings.panels, r = topicRoles();
+    var ca = activeChars().filter(function (c) { return c.name === r.a; })[0] || {}, cb = activeChars().filter(function (c) { return c.name === r.b; })[0] || {};
+    var type = byId(D.SCRIPT_TYPES, state.topic.type).zh;
+    return '你是擅長把知識畫成漫畫的編劇。請用剛好 ' + n + ' 格的短篇漫畫，向一般大眾解釋「' + cleanTopic(state.topic.text) + '」。\n' + '（使用者原始需求：' + state.topic.text.trim() + '）\n' +
+      '腳本類型：' + type + '\n講解者：' + r.a + (ca.personality ? '（' + ca.personality + '）' : '') + '\n提問者／主角：' + r.b + (cb.personality ? '（' + cb.personality + '）' : '') + '\n' +
+      (state.topic.ctx.trim() ? '舉例情境：' + state.topic.ctx.trim() + '\n' : '') +
+      '規則：\n- 剛好 ' + n + ' 行，每行是一格\n- 每行格式：角色名稱＋動作描述：「對白」（每行都要寫出角色名稱，不要用他／她代替）\n- 對白用繁體中文口語，每句 25 字以內\n- 內容要正確，重點講清楚，不要杜撰數據\n- 第一格提出問題或情境，最後一格要有總結或小笑點\n- 只輸出 ' + n + ' 行腳本，不要編號、標題或任何說明';
+  }
+
+  function applyScript(script, how) {
+    var mood = byId(D.SCRIPT_TYPES, state.topic.type).mood;
+    state.settings.mood = mood;
+    state.text = script; $('srcText').value = script; updateTextCount();
+    renderSettings(); setSrcTab('text'); storyboard(true);
+    toast(how + '腳本已產生，可在文字框修改後按「規則式分鏡」重新拆格');
+  }
+
+  function ruleTopic() {
+    if (!state.topic.text.trim()) { toast('請先輸入主題，例如：SWOT 分析'); $('topicText').focus(); return; }
+    var hit = findTopic(state.topic.text);
+    applyScript(ruleScript(), '規則式');
+    $('topicStatus').textContent = hit ? '✓ 使用內建主題「' + hit.title + '」的重點' : '⚠ 這個主題不在內建清單，已用通用講解結構；想要更具體的內容請用「🤖 AI 生腳本」。';
+  }
+
+  async function aiTopic() {
+    if (!state.topic.text.trim()) { toast('請先輸入主題，例如：SWOT 分析'); $('topicText').focus(); return; }
+    if (!aiReady()) { toast('請先在 ⚙ 常用設定填入 AI 金鑰（自訂端點需填網址與模型）'); openSettings(); return; }
+    var btn = $('btnTopicAi'); btn.disabled = true; $('topicStatus').textContent = 'AI 撰寫腳本中…';
+    try {
+      var model = aiModel();
+      var txt = await callLLM(prefs.aiProvider, model, prefs.aiKey, aiScriptPrompt());
+      var lines = txt.replace(/```[a-z]*/g, '').split(/\n+/).map(function (s) { return s.replace(/^\s*(第?\s*\d+\s*格?\s*[.、:：)）]\s*|[-*•]\s*)/, '').trim(); }).filter(Boolean);
+      if (!lines.length) throw new Error('AI 沒有回傳腳本');
+      applyScript(lines.slice(0, state.settings.panels).join('\n'), 'AI ');
+      $('topicStatus').textContent = '✓ AI 腳本完成（' + model + '）';
+    } catch (err) {
+      applyScript(ruleScript(), '規則式');
+      $('topicStatus').textContent = '⚠ AI 失敗，已改用規則式腳本：' + err.message;
+    } finally { btn.disabled = false; }
+  }
+
+  function setSrcTab(tab) {
+    state.topic.tab = tab;
+    document.querySelectorAll('#srcTabs [data-src]').forEach(function (b) { var on = b.dataset.src === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    $('paneText').hidden = tab !== 'text'; $('paneTopic').hidden = tab !== 'topic';
+    saveDraft();
+  }
+  function renderTopicChars() {
+    var names = activeChars().map(function (c) { return c.name; });
+    var opts = '<option value="">（自動）</option>' + names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+    $('topicA').innerHTML = opts; $('topicB').innerHTML = opts;
+    $('topicA').value = names.indexOf(state.topic.a) >= 0 ? state.topic.a : '';
+    $('topicB').value = names.indexOf(state.topic.b) >= 0 ? state.topic.b : '';
+  }
+  function renderTopic() {
+    fillSelect($('topicType'), D.SCRIPT_TYPES, state.topic.type);
+    $('topicText').value = state.topic.text; $('topicCtx').value = state.topic.ctx;
+    var tp = findTopic(state.topic.text);
+    $('topicCtx').placeholder = '留空用預設' + (tp ? '：' + tp.ctx : '，例：咖啡店');
+    $('topicPanels').textContent = state.settings.panels;
+    renderTopicChars(); setSrcTab(state.topic.tab);
+  }
+
   /* ================= BYOK AI 分鏡 ================= */
   var PROVIDERS = {
     gemini: { label: 'Gemini（Google AI Studio）', models: [['gemini-3.5-flash', 'Gemini 3.5 Flash（均衡，推薦）'], ['gemini-3.5-pro', 'Gemini 3.5 Pro（最強）'], ['gemini-2.5-flash', 'Gemini 2.5 Flash（快速省錢）']] },
     openai: { label: 'OpenAI', models: [['gpt-5-mini', 'GPT-5 mini（均衡，推薦）'], ['gpt-5', 'GPT-5（最強）'], ['gpt-4o-mini', 'GPT-4o mini（快速省錢）']] },
     claude: { label: 'Claude（Anthropic）', models: [['claude-sonnet-5-5', 'Claude Sonnet 5.5（均衡，推薦）'], ['claude-opus-5-5', 'Claude Opus 5.5（最強）'], ['claude-haiku-5-5', 'Claude Haiku 5.5（快速省錢）']] },
-    openrouter: { label: 'OpenRouter', models: [['openai/gpt-4o-mini', 'OpenAI GPT-4o mini（推薦）'], ['google/gemini-2.5-flash', 'Google Gemini 2.5 Flash'], ['anthropic/claude-sonnet-4.5', 'Anthropic Claude Sonnet 4.5']] }
+    openrouter: { label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: [['openai/gpt-4o-mini', 'OpenAI GPT-4o mini（推薦）'], ['google/gemini-2.5-flash', 'Google Gemini 2.5 Flash'], ['anthropic/claude-sonnet-4.5', 'Anthropic Claude Sonnet 4.5']] },
+    deepseek: { label: 'DeepSeek', url: 'https://api.deepseek.com/chat/completions', models: [['deepseek-chat', 'DeepSeek Chat（推薦）'], ['deepseek-reasoner', 'DeepSeek Reasoner（推理）']] },
+    xai: { label: 'xAI Grok', url: 'https://api.x.ai/v1/chat/completions', models: [['grok-4', 'Grok 4'], ['grok-3-mini', 'Grok 3 mini（快速省錢）']] },
+    custom: { label: '自訂（OpenAI 相容端點，例如 Ollama、LM Studio）', models: [] }
   };
+  PROVIDERS.openai.url = 'https://api.openai.com/v1/chat/completions';
+  function aiModel() { return (prefs.aiModelCustom || '').trim() || prefs.aiModel || ((PROVIDERS[prefs.aiProvider] || PROVIDERS.gemini).models[0] || [''])[0]; }
+  // 自訂端點可只填到 /v1，自動補上 /chat/completions；本機服務（Ollama 等）可以不填金鑰
+  function customUrl(base) { base = (base || '').trim().replace(/\/+$/, ''); return /\/chat\/completions$/.test(base) ? base : base + '/chat/completions'; }
+  function aiReady() {
+    if (prefs.aiProvider === 'custom') return !!(prefs.aiBase || '').trim() && !!aiModel();
+    return !!prefs.aiKey;
+  }
 
   async function callLLM(provider, model, apiKey, prompt) {
     var url, headers, body, extract;
@@ -479,9 +645,11 @@
       headers = { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
       body = { model: model, max_tokens: 4000, messages: [{ role: 'user', content: prompt }] };
       extract = function (d) { return (d.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join(''); };
-    } else if (provider === 'openai' || provider === 'openrouter') {
-      url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
-      headers = { 'content-type': 'application/json', 'authorization': 'Bearer ' + apiKey };
+    } else if (provider !== 'gemini') {
+      // OpenAI 相容格式：OpenAI、OpenRouter、DeepSeek、xAI、自訂端點
+      url = provider === 'custom' ? customUrl(prefs.aiBase) : PROVIDERS[provider].url;
+      headers = { 'content-type': 'application/json' };
+      if (apiKey) headers.authorization = 'Bearer ' + apiKey;
       body = { model: model, messages: [{ role: 'user', content: prompt }] };
       extract = function (d) { return d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content; };
     } else {
@@ -526,10 +694,10 @@
 
   async function aiStoryboard() {
     if (!state.text.trim()) { toast('請先輸入故事文字'); return; }
-    if (!prefs.aiKey) { toast('請先在 ⚙ 常用設定填入 AI 金鑰'); openSettings(); return; }
+    if (!aiReady()) { toast('請先在 ⚙ 常用設定填入 AI 金鑰（自訂端點需填網址與模型）'); openSettings(); return; }
     var btn = $('btnAiStoryboard'); btn.disabled = true; $('aiStatus').textContent = 'AI 分鏡中…';
     try {
-      var model = prefs.aiModel || PROVIDERS[prefs.aiProvider].models[0][0];
+      var model = aiModel();
       var txt = await callLLM(prefs.aiProvider, model, prefs.aiKey, aiPrompt());
       var panels = parseAiPanels(txt);
       var n = state.settings.panels;
@@ -551,7 +719,8 @@
   function renderProviderModels() {
     var pv = PROVIDERS[$('setAiProvider').value] || PROVIDERS.gemini;
     var cur = prefs.aiProvider === $('setAiProvider').value ? prefs.aiModel : '';
-    $('setAiModel').innerHTML = pv.models.map(function (m) { return '<option value="' + m[0] + '"' + (m[0] === cur ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('');
+    $('setAiModel').innerHTML = pv.models.map(function (m) { return '<option value="' + m[0] + '"' + (m[0] === cur ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') || '<option value="">（請在下方填模型名稱）</option>';
+    $('aiBaseWrap').hidden = $('setAiProvider').value !== 'custom';
   }
   function openSettings() {
     fillSelect($('setPlatform'), PLATFORMS, prefs.platform, function (p) { return p.label; });
@@ -565,12 +734,14 @@
     $('setAiProvider').innerHTML = Object.keys(PROVIDERS).map(function (k) { return '<option value="' + k + '"' + (k === prefs.aiProvider ? ' selected' : '') + '>' + PROVIDERS[k].label + '</option>'; }).join('');
     renderProviderModels();
     $('setAiKey').value = prefs.aiKey || '';
+    $('setAiModelCustom').value = prefs.aiModelCustom || ''; $('setAiBase').value = prefs.aiBase || ''; $('aiTestStatus').textContent = '';
     openModal('settings');
   }
   function saveSettings() {
     prefs.platform = $('setPlatform').value; prefs.style = $('setStyle').value; prefs.panels = +$('setPanels').value;
     prefs.ratio = $('setRatio').value; prefs.layout = $('setLayout').value; prefs.color = $('setColor').value; prefs.lang = $('setLang').value;
     prefs.theme = $('setTheme').value; prefs.aiProvider = $('setAiProvider').value; prefs.aiModel = $('setAiModel').value; prefs.aiKey = $('setAiKey').value.trim();
+    prefs.aiModelCustom = $('setAiModelCustom').value.trim(); prefs.aiBase = $('setAiBase').value.trim();
     lsSet(LS.prefs, prefs); applyTheme();
   }
 
@@ -599,8 +770,38 @@
     $('exampleChips').addEventListener('click', function (e) { var b = e.target.closest('[data-ex]'); if (b) loadExample(b.dataset.ex); });
 
     $('srcText').addEventListener('input', function () { state.text = this.value; updateTextCount(); saveDraft(); });
-    $('btnStoryboard').addEventListener('click', function () { if (!state.text.trim()) { toast('請先輸入故事文字'); return; } storyboard(true); toast('已依文字拆成 ' + state.panels.length + ' 格'); });
-    $('btnAiStoryboard').addEventListener('click', aiStoryboard);
+
+    // 主題生腳本
+    $('srcTabs').addEventListener('click', function (e) { var b = e.target.closest('[data-src]'); if (b) setSrcTab(b.dataset.src); });
+    $('topicChips').innerHTML = D.TOPICS.map(function (t) { return '<button type="button" class="chip" data-topic="' + t.id + '">' + t.title + '</button>'; }).join('');
+    $('topicChips').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-topic]'); if (!b) return;
+      state.topic.text = byId(D.TOPICS, b.dataset.topic).title; renderTopic(); saveDraft();
+    });
+    $('topicText').addEventListener('input', function () {
+      state.topic.text = this.value; var tp = findTopic(this.value);
+      $('topicCtx').placeholder = '留空用預設' + (tp ? '：' + tp.ctx : '，例：咖啡店'); saveDraft();
+    });
+    $('topicText').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ruleTopic(); } });
+    $('topicCtx').addEventListener('input', function () { state.topic.ctx = this.value; saveDraft(); });
+    $('topicType').addEventListener('change', function () { state.topic.type = this.value; saveDraft(); });
+    $('topicA').addEventListener('change', function () { state.topic.a = this.value; saveDraft(); });
+    $('topicB').addEventListener('change', function () { state.topic.b = this.value; saveDraft(); });
+    $('btnTopicRule').addEventListener('click', ruleTopic);
+    $('btnTopicAi').addEventListener('click', aiTopic);
+    // 故事框裡只打了「請解釋什麼是 SWOT 分析」這類一句話時，自動改走主題生腳本
+    function routeTopic(useAi) {
+      if (!looksLikeTopicRequest(state.text)) return false;
+      state.topic.text = state.text.trim(); renderTopic();
+      if (useAi) aiTopic(); else ruleTopic();
+      return true;
+    }
+    $('btnStoryboard').addEventListener('click', function () {
+      if (!state.text.trim()) { toast('請先輸入故事文字'); return; }
+      if (routeTopic(false)) return;
+      storyboard(true); toast('已依文字拆成 ' + state.panels.length + ' 格');
+    });
+    $('btnAiStoryboard').addEventListener('click', function () { if (!routeTopic(true)) aiStoryboard(); });
     $('btnClear').addEventListener('click', function () { state.text = ''; $('srcText').value = ''; updateTextCount(); saveDraft(); $('srcText').focus(); });
 
     var map = { optStyle: 'style', optLayout: 'layout', optRatio: 'ratio', optColor: 'color', optLang: 'lang', optBubble: 'bubble', optMood: 'mood', optDir: 'dir' };
@@ -614,6 +815,7 @@
     $('charList').addEventListener('input', function (e) {
       var t = e.target; if (!t.dataset.ck) return;
       state.chars[+t.dataset.ci][t.dataset.ck] = t.value; renderOutput(); saveDraft();
+      if (t.dataset.ck === 'name') renderTopicChars();
     });
     $('charList').addEventListener('change', function (e) {
       var t = e.target; if (!t.classList.contains('char-preset') || !t.value) return;
@@ -678,13 +880,25 @@
     // 設定
     $('settingsBtn').addEventListener('click', openSettings);
     $('setAiProvider').addEventListener('change', renderProviderModels);
+    $('testAi').addEventListener('click', async function () {
+      saveSettings();
+      var st = $('aiTestStatus'), b = this;
+      if (!aiReady()) { st.textContent = '⚠ 請先填金鑰（自訂端點需填網址與模型名稱）'; return; }
+      b.disabled = true; st.textContent = '連線中…';
+      try {
+        var t = await callLLM(prefs.aiProvider, aiModel(), prefs.aiKey, '請只回覆兩個字：OK');
+        st.textContent = '✓ 連線成功（' + aiModel() + '）：' + String(t).trim().slice(0, 30);
+      } catch (err) {
+        st.textContent = '✕ 連線失敗：' + err.message + (/Failed to fetch|NetworkError/i.test(err.message) ? '（可能是網址錯誤，或該服務不允許瀏覽器直接呼叫 CORS）' : '');
+      } finally { b.disabled = false; }
+    });
     $('settingsSave').addEventListener('click', function () { saveSettings(); closeModal('settings'); toast('已儲存常用設定（新專案會套用）'); });
     $('settingsApply').addEventListener('click', function () {
       saveSettings();
       Object.assign(state.settings, { style: prefs.style, panels: +prefs.panels, ratio: prefs.ratio, layout: prefs.layout, color: prefs.color, lang: prefs.lang });
       state.platform = prefs.platform; renderSettings(); renderTabs(); storyboard(true); closeModal('settings'); toast('已儲存並套用到目前專案');
     });
-    $('settingsReset').addEventListener('click', function () { prefs = Object.assign({}, PREF_DEFAULTS, { aiKey: prefs.aiKey }); lsSet(LS.prefs, prefs); applyTheme(); openSettings(); toast('已恢復預設（AI 金鑰保留）'); });
+    $('settingsReset').addEventListener('click', function () { prefs = Object.assign({}, PREF_DEFAULTS, { aiKey: prefs.aiKey, aiProvider: prefs.aiProvider, aiModel: prefs.aiModel, aiModelCustom: prefs.aiModelCustom, aiBase: prefs.aiBase }); lsSet(LS.prefs, prefs); applyTheme(); openSettings(); toast('已恢復預設（AI 連線設定保留）'); });
     $('clearKey').addEventListener('click', function () { $('setAiKey').value = ''; prefs.aiKey = ''; lsSet(LS.prefs, prefs); toast('已清除金鑰'); });
 
     // 關於／彈窗
@@ -729,7 +943,8 @@
     state: state, prefs: function () { return prefs; }, loadExample: loadExample, storyboard: storyboard, buildPrompt: buildPrompt,
     setPlatform: function (p) { state.platform = p; renderTabs(); renderOutput(); },
     set: function (k, v) { state.settings[k] = v; renderSettings(); if (k === 'panels') storyboard(true); else renderOutput(); },
-    openSettings: openSettings, parseAiPanels: parseAiPanels, aiPrompt: aiPrompt
+    openSettings: openSettings, parseAiPanels: parseAiPanels, aiPrompt: aiPrompt,
+    setTopic: function (o) { Object.assign(state.topic, o); renderTopic(); }, ruleScript: ruleScript, ruleTopic: ruleTopic, aiScriptPrompt: aiScriptPrompt
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

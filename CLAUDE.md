@@ -1,10 +1,12 @@
 # CLAUDE.md — comic-prompt-studio（漫畫分鏡提示詞工坊）
 
-輸入一段文字 → 拆成 2／3／4／6／8 格短篇漫畫分鏡 → 依平台組成生圖提示詞（Gemini、ChatGPT、Midjourney、通用中英對照），可選「整頁一張圖」或「逐格分開生成」。無框架、無建置、無序號授權。2026-10-29 建立。
+輸入一段文字 → 拆成 2／3／4／6／8 格短篇漫畫分鏡 → 依平台組成生圖提示詞（Gemini、ChatGPT、Midjourney、通用中英對照），可選「整頁一張圖」或「逐格分開生成」。另有「💡 主題生腳本」分頁：輸入「請解釋什麼是 SWOT 分析」→ 產生多格講解腳本 → 走同一條分鏡／提示詞管線。無框架、無建置、無序號授權。2026-10-29 建立。
 
 ## 檔案
 - `data.js`：`window.CPS`。12 種風格（`zhDesc` 給 Gemini／ChatGPT、`en` 給 MJ、`niji` 決定 `--niji 6`／`--v 7`）、版面／比例／色彩／對白語言／對白框／基調／閱讀方向／鏡頭／表情、`EXPR_KEYWORDS`（規則式表情偵測）、人物預設＝`FAMOUS_PRESETS` **12 位知名卡通人物**（加菲貓、歐弟、史努比、查理布朗、米老鼠、唐老鴨、小熊維尼、哆啦A夢、皮卡丘、海綿寶寶、凱蒂貓、蠟筆小新；`famous:true` 會在提示詞加註「維持原作經典造型」）＋`ORIGINAL_PRESETS` 8 位原創人物（範例故事使用），`PRESET_GROUPS` 決定選單分組順序、**10 組範例**。
 - `app.js`：規則式分鏡 `ruleStoryboard()`（換行→句號→引號外逗號拆分、不足補「反應」格、過多平均合併；只有前接「：」或說／喊／問的引號才算對白，其餘留在畫面描述；說話者取對白所在子句最先出現的角色，找不到就留空）、四個 `build*` 提示詞產生器、人物卡、BYOK AI 分鏡（Gemini／OpenAI／Claude／OpenRouter，回傳 JSON 陣列，失敗退回規則式）、歷史、專案 .json。測試 hook `window.__comicPrompt`（`state/loadExample/storyboard/buildPrompt/setPlatform/set/openSettings/parseAiPanels/aiPrompt`）。
+- 主題生腳本：`data.js` 的 `SCRIPT_TYPES`（4 種，各帶預設情緒基調）、`TOPICS`（14 個框架，points＝[標籤, 預設情境例子, 自訂情境通用說法]）、`GENERIC_TOPIC`；`app.js` 的 `cleanTopic()` 去掉「請解釋／什麼是」等請求語、`looksLikeTopicRequest()` 讓故事框裡的一句請求自動改走主題流程、`ruleScript()` 一格一行輸出（每行含角色名與「：「」」，讓 `ruleStoryboard()` 一對一拆格）、`aiScriptPrompt()`。
+- AI 連線：`PROVIDERS` 含 gemini／openai／claude／openrouter／deepseek／xai／custom（OpenAI 相容，`aiBase` 只填到 /v1 會自動補 /chat/completions，本機服務可不填金鑰）；`aiModelCustom` 優先於下拉模型；⚙ 設定有「🔌 測試連線」。
 - localStorage：`comicPromptPrefs`（常用設定含金鑰）、`comicPromptDraft`（自動暫存）、`comicPromptMyChars`、`comicPromptHistory`（20 筆）、`comicPromptWarnSeen`、`comicPromptMarquee`。
 
 ## 配套

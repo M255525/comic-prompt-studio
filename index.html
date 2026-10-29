@@ -116,6 +116,7 @@ textarea:focus,input:focus,select:focus{outline:none;border-color:var(--line);bo
 .tabs{display:flex;gap:0;border-bottom:3px solid var(--line);margin-bottom:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .tab{font:inherit;font-weight:900;font-size:14.5px;border:3px solid var(--line);border-bottom:0;background:var(--paper2);color:var(--ink);padding:7px 14px;margin-right:-3px;border-radius:10px 10px 0 0;cursor:pointer;white-space:nowrap}
 .tab.on{background:var(--accent);color:#1b1b1f}
+.srctabs .tab{font-size:14px;padding:6px 12px}
 .ptip{font-size:13px;color:var(--ink2);background:var(--paper2);border-left:4px solid var(--accent);padding:7px 10px;border-radius:0 8px 8px 0;margin:0 0 10px}
 #promptOut{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,"Noto Sans TC",monospace;font-size:13.5px;line-height:1.65;background:var(--field);border:2px solid var(--soft);border-radius:10px;padding:12px;margin:0;max-height:440px;overflow:auto}
 
@@ -183,7 +184,29 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
 <main>
   <div class="col">
     <section class="card" aria-labelledby="h1s">
-      <h2 id="h1s"><span class="step">1</span>輸入故事文字 <span class="aside" id="textCount">0 字</span></h2>
+      <h2 id="h1s"><span class="step">1</span>輸入內容</h2>
+      <div class="tabs srctabs" id="srcTabs" role="tablist" aria-label="輸入方式">
+        <button type="button" role="tab" class="tab on" data-src="text" aria-selected="true">✍ 輸入故事</button>
+        <button type="button" role="tab" class="tab" data-src="topic" aria-selected="false">💡 主題生腳本</button>
+      </div>
+      <div id="paneTopic" hidden>
+        <p class="hint">輸入一個概念、方法或知識點，自動寫成一段多格講解小腳本，再套用 ② 漫畫設定產生提示詞。內建主題：</p>
+        <div class="chips" id="topicChips"></div>
+        <label class="fld"><span>主題</span><input type="text" id="topicText" placeholder="例：請解釋什麼是 SWOT 分析" autocomplete="off"></label>
+        <div class="opts" style="margin-top:10px">
+          <label class="fld"><span>腳本類型</span><select id="topicType"></select></label>
+          <label class="fld"><span>講解者</span><select id="topicA"></select></label>
+          <label class="fld"><span>提問者／主角</span><select id="topicB"></select></label>
+          <label class="fld wide"><span>舉例情境（選填）</span><input type="text" id="topicCtx" placeholder="留空用預設，例：咖啡店"></label>
+        </div>
+        <p class="hint" style="margin:8px 0 0">格數：<b id="topicPanels">4</b> 格（在 ② 漫畫設定調整）。講解者／提問者從 ③ 登場人物挑選，不足兩位會自動加入 Pico 與小米。</p>
+        <div class="row">
+          <button class="btn primary" id="btnTopicRule" type="button">✂ 規則式生腳本</button>
+          <button class="btn red" id="btnTopicAi" type="button">🤖 AI 生腳本</button>
+          <span class="status" id="topicStatus">內建 14 個常見框架免金鑰；其他主題建議用 AI 生腳本，內容更具體。</span>
+        </div>
+      </div>
+      <div id="paneText">
       <p class="hint">貼上故事、貼文、課程重點或一段對話；用「」標出對白，人物名字寫在文中會自動對應登場角色。範例：</p>
       <div class="chips" id="exampleChips"></div>
       <textarea id="srcText" aria-label="故事文字" placeholder="例：星期一早上，小晴抱著咖啡衝進辦公室……&#10;她大喊：「完了完了，下午就要報告了！」"></textarea>
@@ -192,6 +215,8 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
         <button class="btn red" id="btnAiStoryboard" type="button">🤖 AI 分鏡</button>
         <button class="btn ghost" id="btnClear" type="button">清空</button>
         <span class="status" id="aiStatus">規則式免金鑰；AI 分鏡需在 ⚙ 常用設定填入自己的 API 金鑰，失敗會自動改用規則式。</span>
+        <span class="count" id="textCount">0 字</span>
+      </div>
       </div>
     </section>
 
@@ -275,12 +300,15 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
       <label class="fld"><span>預設對白語言</span><select id="setLang"></select></label>
       <label class="fld"><span>外觀</span><select id="setTheme"><option value="system">跟隨系統</option><option value="light">亮色</option><option value="dark">暗色</option></select></label>
     </div>
-    <div class="sect">AI 分鏡（選用，自備金鑰 BYOK）</div>
+    <div class="sect">AI 語言模型（AI 分鏡／AI 生腳本用，自備金鑰 BYOK）</div>
     <div class="sgrid">
       <label class="fld"><span>服務商</span><select id="setAiProvider"></select></label>
       <label class="fld"><span>模型</span><select id="setAiModel"></select></label>
-      <label class="fld wide" style="grid-column:1/-1"><span>API 金鑰（只存在本機瀏覽器，直接送到該服務商）</span><input type="password" id="setAiKey" autocomplete="off" placeholder="貼上你的 API 金鑰"></label>
+      <label class="fld" style="grid-column:1/-1"><span>自訂模型名稱（選填，填了就優先使用，例如新推出的模型）</span><input type="text" id="setAiModelCustom" autocomplete="off" placeholder="例：gpt-5-mini、llama3.1"></label>
+      <label class="fld" id="aiBaseWrap" style="grid-column:1/-1" hidden><span>API 網址（OpenAI 相容）</span><input type="text" id="setAiBase" autocomplete="off" placeholder="例：http://localhost:11434/v1"></label>
+      <label class="fld wide" style="grid-column:1/-1"><span>API 金鑰（只存在本機瀏覽器，直接送到該服務商；本機 Ollama 等可不填）</span><input type="password" id="setAiKey" autocomplete="off" placeholder="貼上你的 API 金鑰"></label>
     </div>
+    <div class="row" style="margin-top:8px"><button class="btn ghost" type="button" id="testAi">🔌 測試連線</button><span class="status" id="aiTestStatus" style="flex-basis:auto;flex:1"></span></div>
     <div class="sfoot">
       <button class="btn ghost" type="button" id="clearKey">清除金鑰</button>
       <button class="btn ghost" type="button" id="settingsReset">恢復預設</button>
