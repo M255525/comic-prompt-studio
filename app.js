@@ -21,7 +21,7 @@
   }
 
   function defaultTopic() { return { tab: 'text', text: '', type: 'knowledge', ctx: '', a: '', b: '' }; }
-  var state = { text: '', settings: defaultSettings(), chars: [], panels: [], platform: prefs.platform, edited: false, topic: defaultTopic() };
+  var state = { text: '', settings: defaultSettings(), chars: [], panels: [], platform: prefs.platform, edited: false, topic: defaultTopic(), polish: {}, showRaw: false };
 
   /* ================= 人物 ================= */
   function presetToChar(p) {
@@ -410,10 +410,21 @@
     $('platformTip').textContent = byId(PLATFORMS, state.platform).tip;
   }
 
+  // AI 潤飾結果依平台存放；原始提示詞（src）一變就失效，改回顯示程式組合版
+  function finalPrompt(pid) {
+    var raw = buildPrompt(pid), p = state.polish[pid];
+    return p && p.src === raw ? p.text : raw;
+  }
   function renderOutput() {
-    var txt = buildPrompt();
+    var raw = buildPrompt(), p = state.polish[state.platform];
+    var valid = !!(p && p.src === raw), use = valid && !state.showRaw;
+    var txt = use ? p.text : raw;
     $('promptOut').textContent = txt;
     $('promptLen').textContent = txt.length + ' 字';
+    $('polishBadge').textContent = use ? '✨ AI 潤飾版' : valid ? '原始版' : (p ? '內容已變更，可重新潤飾' : '');
+    $('polishBadge').hidden = !$('polishBadge').textContent;
+    $('btnShowRaw').hidden = !valid;
+    $('btnShowRaw').textContent = state.showRaw ? '✨ 看潤飾版' : '↺ 看原始版';
   }
 
   function renderAll() { renderSettings(); renderChars(); renderPanels(); renderTabs(); renderOutput(); $('srcText').value = state.text; updateTextCount(); renderTopic(); }
@@ -711,6 +722,45 @@
     } finally { btn.disabled = false; }
   }
 
+  /* ================= AI 潤飾提示詞 ================= */
+  var POLISH_FORMAT = {
+    gemini: '中文自然語言段落，可分段，維持「整頁／逐格」的結構',
+    chatgpt: '保留 Markdown 標題與條列結構（## 風格、## 角色、### Panel…），語句改通順',
+    mj: '英文，保留每段開頭的 /imagine prompt: 與結尾所有 -- 參數原樣不動；最後的中文「對白」清單原樣保留',
+    generic: '中英對照，每段中文後面接對應英文'
+  };
+  function polishPrompt(raw) {
+    var o = opt();
+    return '你是專業的 AI 生圖提示詞編修師。下面是程式自動組合、給「' + byId(PLATFORMS, state.platform).label + '」使用的' +
+      (o.s.genMode === 'each' ? '逐格' : '整頁') + ' ' + o.panels.length + ' 格漫畫生圖提示詞，語句生硬、像表格。\n' +
+      '請改寫成通順自然、畫面感強、生圖 AI 容易理解的提示詞：\n' +
+      '- 格數、每格順序、每格的鏡頭與登場角色都不能變，也不要新增或刪除劇情\n' +
+      '- 角色的外型、服裝、配色描述要完整保留，並維持「每一格角色外觀一致」的要求\n' +
+      '- 引號「」裡的對白與音效字一字不改\n' +
+      '- 圖片比例、畫風、色彩、閱讀方向、文字要求（不要錯字／浮水印）都要保留\n' +
+      '- 可以補充構圖、背景、光線、肢體動作與表情等畫面細節，讓每一格更生動\n' +
+      '- 輸出格式：' + POLISH_FORMAT[state.platform] + '\n' +
+      '- 只輸出改寫後的提示詞本身，不要任何前言、說明或 ``` 符號\n\n原始提示詞：\n"""\n' + raw + '\n"""';
+  }
+  async function aiPolish() {
+    if (!state.panels.length) { toast('請先產生分鏡'); return; }
+    if (!aiReady()) { toast('請先在 ⚙ 常用設定填入 AI 金鑰（自訂端點需填網址與模型）'); openSettings(); return; }
+    var raw = buildPrompt(), pid = state.platform, btn = $('btnPolish');
+    btn.disabled = true; $('polishStatus').textContent = 'AI 潤飾 ' + byId(PLATFORMS, pid).label + ' 提示詞中…';
+    try {
+      var model = aiModel();
+      var txt = (await callLLM(prefs.aiProvider, model, prefs.aiKey, polishPrompt(raw))).replace(/^```[a-z]*\s*|```\s*$/g, '').trim();
+      if (!txt) throw new Error('AI 沒有回傳內容');
+      // 檢查對白有沒有被改掉：原始版每句「」都應該還在
+      var lost = (raw.match(/「[^」]+」/g) || []).filter(function (q) { return txt.indexOf(q.slice(1, -1)) < 0; });
+      state.polish[pid] = { src: raw, text: txt }; state.showRaw = false;
+      renderOutput();
+      $('polishStatus').textContent = '✓ 已用 ' + model + ' 潤飾' + (lost.length ? '；⚠ 有 ' + lost.length + ' 句對白被改寫，請檢查或按「看原始版」' : '') + '。修改分鏡或設定後需重新潤飾。';
+    } catch (err) {
+      $('polishStatus').textContent = '⚠ AI 潤飾失敗：' + err.message + '（仍可使用原始版）';
+    } finally { btn.disabled = false; }
+  }
+
   /* ================= 設定面板 ================= */
   function applyTheme() {
     var r = document.documentElement;
@@ -851,6 +901,8 @@
 
     // 輸出
     $('platformTabs').addEventListener('click', function (e) { var b = e.target.closest('[data-platform]'); if (!b) return; state.platform = b.dataset.platform; renderTabs(); renderOutput(); saveDraft(); });
+    $('btnPolish').addEventListener('click', aiPolish);
+    $('btnShowRaw').addEventListener('click', function () { state.showRaw = !state.showRaw; renderOutput(); });
     $('btnCopy').addEventListener('click', function () {
       var txt = $('promptOut').textContent;
       (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast('已複製 ' + byId(PLATFORMS, state.platform).label + ' 提示詞'); })
@@ -859,7 +911,7 @@
     });
     $('btnDownload').addEventListener('click', function () { download('漫畫提示詞-' + state.platform + '-' + stamp() + '.txt', $('promptOut').textContent, 'text/plain;charset=utf-8'); pushHistory(); });
     $('btnDownloadAll').addEventListener('click', function () {
-      var all = PLATFORMS.map(function (p) { return '########## ' + p.label + ' ##########\n' + buildPrompt(p.id); }).join('\n\n\n');
+      var all = PLATFORMS.map(function (p) { return '########## ' + p.label + ' ##########\n' + finalPrompt(p.id); }).join('\n\n\n');
       download('漫畫提示詞-四平台-' + stamp() + '.txt', all, 'text/plain;charset=utf-8'); pushHistory();
     });
     $('btnSaveJson').addEventListener('click', function () { download('漫畫分鏡專案-' + stamp() + '.json', JSON.stringify(snapshot(), null, 2), 'application/json'); pushHistory(); toast('已下載專案檔'); });
@@ -944,7 +996,7 @@
     setPlatform: function (p) { state.platform = p; renderTabs(); renderOutput(); },
     set: function (k, v) { state.settings[k] = v; renderSettings(); if (k === 'panels') storyboard(true); else renderOutput(); },
     openSettings: openSettings, parseAiPanels: parseAiPanels, aiPrompt: aiPrompt,
-    setTopic: function (o) { Object.assign(state.topic, o); renderTopic(); }, ruleScript: ruleScript, ruleTopic: ruleTopic, aiScriptPrompt: aiScriptPrompt
+    aiPolish: aiPolish, finalPrompt: finalPrompt, polishPrompt: polishPrompt, setTopic: function (o) { Object.assign(state.topic, o); renderTopic(); }, ruleScript: ruleScript, ruleTopic: ruleTopic, aiScriptPrompt: aiScriptPrompt
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

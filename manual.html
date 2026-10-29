@@ -40,6 +40,7 @@ code{background:var(--soft);padding:1px 5px;border-radius:5px}
   <li><a href="#what">這是什麼工具</a></li>
   <li><a href="#steps">五個步驟</a></li>
   <li><a href="#topic">💡 主題生腳本</a></li>
+  <li><a href="#polish">✨ AI 潤飾提示詞</a></li>
   <li><a href="#settings">漫畫設定說明</a></li>
   <li><a href="#chars">登場人物與預設人物</a></li>
   <li><a href="#platforms">四個平台的差別</a></li>
@@ -64,6 +65,17 @@ code{background:var(--soft);padding:1px 5px;border-radius:5px}
   <li><b>分鏡微調</b>：每格的場景、動作、表情、鏡頭、說話者、對白、音效字都能手動修改，上方提示詞即時更新。</li>
 </ol>
 <p>規則式分鏡的拆法：先依換行分段，不夠格數再依句號、驚嘆號切句，仍不夠就在逗號處拆開，最後補上「表情反應特寫」格；段落太多則平均合併。</p>
+</section>
+
+<section id="polish">
+<h2>✨ AI 潤飾提示詞</h2>
+<p>程式組合的提示詞重點齊全，但語句比較像表格。按「✨ AI 潤飾」會用你在 ⚙ 常用設定填的 AI 金鑰，把<b>目前分頁</b>的提示詞改寫得通順自然、補上構圖、背景、光線與表情等畫面細節。</p>
+<ul>
+  <li>格數、鏡頭、角色外型、比例與文字要求都會保留；引號裡的對白與音效字要求一字不改，若 AI 改到了會在下方提醒。</li>
+  <li>潤飾後標題旁出現「✨ AI 潤飾版」，複製、下載都用潤飾版；按「↺ 看原始版」可切回程式組合版。</li>
+  <li>四個平台分開潤飾；修改分鏡、人物或設定後，潤飾版會失效，需要再按一次。</li>
+  <li>每按一次會呼叫一次 AI，費用由你的帳號支付。</li>
+</ul>
 </section>
 
 <section id="topic">
@@ -137,7 +149,7 @@ code{background:var(--soft);padding:1px 5px;border-radius:5px}
 <h2>7. ⚙ 常用設定與存檔</h2>
 <ul>
   <li><b>常用設定</b>：預設平台、風格、格數、比例、版面、色彩、對白語言、外觀（亮／暗）、AI 分鏡服務商／模型／金鑰。「儲存」只影響新專案，「儲存並套用」同時改目前專案。</li>
-  <li><b>AI 語言模型</b>（AI 分鏡、AI 生腳本共用）支援 Gemini、OpenAI、Claude、OpenRouter、DeepSeek、xAI Grok，以及「自訂（OpenAI 相容端點）」可接本機 Ollama、LM Studio 等。可另填「自訂模型名稱」使用新模型；按「🔌 測試連線」確認接得通。金鑰只存在本機瀏覽器，直接送到該服務商；失敗會自動改用規則式。部分服務可能不允許瀏覽器直接呼叫（CORS），測試連線會提示。</li>
+  <li><b>AI 語言模型</b>（AI 分鏡、AI 生腳本、AI 潤飾共用）支援 Gemini、OpenAI、Claude、OpenRouter、DeepSeek、xAI Grok，以及「自訂（OpenAI 相容端點）」可接本機 Ollama、LM Studio 等。可另填「自訂模型名稱」使用新模型；按「🔌 測試連線」確認接得通。金鑰只存在本機瀏覽器，直接送到該服務商；失敗會自動改用規則式。部分服務可能不允許瀏覽器直接呼叫（CORS），測試連線會提示。</li>
   <li><b>儲存專案</b>下載 .json，可用「開啟專案」還原；<b>歷史紀錄</b>保留最近 20 筆；文字與分鏡也會自動暫存，下次打開會接續。</li>
   <li><b>加入主畫面</b>：按「📲 安裝」，即可像 App 一樣從桌面或手機主畫面開啟。</li>
 </ul>

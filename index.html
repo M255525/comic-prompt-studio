@@ -116,6 +116,7 @@ textarea:focus,input:focus,select:focus{outline:none;border-color:var(--line);bo
 .tabs{display:flex;gap:0;border-bottom:3px solid var(--line);margin-bottom:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
 .tab{font:inherit;font-weight:900;font-size:14.5px;border:3px solid var(--line);border-bottom:0;background:var(--paper2);color:var(--ink);padding:7px 14px;margin-right:-3px;border-radius:10px 10px 0 0;cursor:pointer;white-space:nowrap}
 .tab.on{background:var(--accent);color:#1b1b1f}
+.pbadge{font-size:12px;font-weight:900;background:var(--accent2);color:#fff;border:2px solid var(--line);border-radius:999px;padding:1px 9px}
 .srctabs .tab{font-size:14px;padding:6px 12px}
 .ptip{font-size:13px;color:var(--ink2);background:var(--paper2);border-left:4px solid var(--accent);padding:7px 10px;border-radius:0 8px 8px 0;margin:0 0 10px}
 #promptOut{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,"Noto Sans TC",monospace;font-size:13.5px;line-height:1.65;background:var(--field);border:2px solid var(--soft);border-radius:10px;padding:12px;margin:0;max-height:440px;overflow:auto}
@@ -255,11 +256,13 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
 
   <div class="col">
     <section class="card" aria-labelledby="h5s">
-      <h2 id="h5s"><span class="step">4</span>生圖提示詞 <span class="aside" id="promptLen"></span></h2>
+      <h2 id="h5s"><span class="step">4</span>生圖提示詞 <span class="pbadge" id="polishBadge" hidden></span><span class="aside" id="promptLen"></span></h2>
       <div class="tabs" id="platformTabs" role="tablist" aria-label="目標 AI 平台"></div>
       <p class="ptip" id="platformTip"></p>
       <pre id="promptOut" tabindex="0" aria-live="polite"></pre>
       <div class="row">
+        <button class="btn red" id="btnPolish" type="button" title="用你在 ⚙ 常用設定填的 AI 把提示詞改寫得更通順">✨ AI 潤飾</button>
+        <button class="btn ghost" id="btnShowRaw" type="button" hidden>↺ 看原始版</button>
         <button class="btn primary" id="btnCopy" type="button">📋 複製</button>
         <button class="btn ghost" id="btnDownload" type="button">⬇ 下載 .txt</button>
         <button class="btn ghost" id="btnDownloadAll" type="button">⬇ 四平台一次下載</button>
@@ -267,6 +270,7 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
         <button class="btn ghost" id="btnOpenJson" type="button">📂 開啟專案</button>
         <button class="btn ghost" id="btnHistory" type="button">🕘 歷史紀錄</button>
         <input type="file" id="fileJson" accept=".json,application/json" hidden>
+        <span class="status" id="polishStatus">✨ AI 潤飾：用你自己的 AI 金鑰把程式組合的提示詞改寫得更通順、畫面更生動（對白與格數不變）。</span>
       </div>
     </section>
 
