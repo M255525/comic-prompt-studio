@@ -12,11 +12,11 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', tone: 'standard', aiProvider: 'gemini', aiModel: '', aiModelCustom: '', aiBase: '', aiKey: '' };
+  var PREF_DEFAULTS = { platform: 'gemini', style: 'shonen', panels: 4, ratio: '3:4', lang: 'zh-TW', layout: 'grid', color: 'full', theme: 'system', tone: 'standard', pages: 1, autoSize: false, aiProvider: 'gemini', aiModel: '', aiModelCustom: '', aiBase: '', aiKey: '' };
   var prefs = Object.assign({}, PREF_DEFAULTS, lsGet(LS.prefs, {}));
 
   function defaultSettings() {
-    return { style: prefs.style, panels: +prefs.panels, layout: prefs.layout, ratio: prefs.ratio, color: prefs.color, lang: prefs.lang,
+    return { style: prefs.style, panels: +prefs.panels, pages: +prefs.pages || 1, autoSize: !!prefs.autoSize, layout: prefs.layout, ratio: prefs.ratio, color: prefs.color, lang: prefs.lang,
       bubble: 'round', mood: 'funny', tone: prefs.tone || 'standard', dir: 'ltr', shotMode: 'auto', sfx: true, genMode: 'page' };
   }
 
@@ -117,7 +117,7 @@
   }
 
   function ruleStoryboard() {
-    var n = state.settings.panels, text = state.text.trim();
+    var n = totalPanels(), text = state.text.trim();
     var chars = activeChars();
     if (!text) return [];
     var groups = groupUnits(text, n);
@@ -177,8 +177,32 @@
 
   function blankPanel(i, n) { return { scene: '', sceneEn: '', action: '', actionEn: '', chars: '', expr: 'calm', speaker: '', dialogue: '', shot: autoShot(i, n, 'calm', false), sfx: '' }; }
 
-  function storyboard(force) {
-    var n = state.settings.panels;
+  // ===== 篇幅：每頁格數 × 頁數 =====
+  var PAGE_MAX = 6;
+  var AUTO_RULE = '- 篇幅請依內容多寡自行決定：每頁格數只能是 2、3、4、6、8（各頁相同），頁數 1～6；簡短內容約一頁 4 格，重點多或情節長再加頁\n';
+  function totalPanels() { return state.settings.panels * state.settings.pages; }
+  // 規則式估算：4 格以內一頁、5～6 格一頁 6 格，再多就每頁 4 格分頁（最多 6 頁）
+  function sizeFor(c) {
+    c = Math.max(2, Math.min(c, PAGE_MAX * 4));
+    if (c <= 4) return { panels: c, pages: 1 };
+    if (c <= 6) return { panels: 6, pages: 1 };
+    return { panels: 4, pages: Math.ceil(c / 4) };
+  }
+  function normSize(pages, ppp) {
+    var best = D.PANEL_COUNTS.reduce(function (a, b) { return Math.abs(b - ppp) < Math.abs(a - ppp) ? b : a; });
+    return { panels: best, pages: Math.max(1, Math.min(PAGE_MAX, Math.round(pages) || 1)) };
+  }
+  function textUnits(text) {
+    var lines = text.split(/\n+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (lines.length >= 2) return lines.length;
+    return [].concat.apply([], lines.map(function (u) { return splitOutside(u, /[。！？!?]/); })).length;
+  }
+  function applySize(sz) { state.settings.panels = sz.panels; state.settings.pages = sz.pages; renderSettings(); }
+  function sizeLabel() { var s = state.settings; return s.panels + ' 格 × ' + s.pages + ' 頁' + (s.autoSize ? '（自動）' : ''); }
+
+  function storyboard(force, keepSize) {
+    if (state.settings.autoSize && !keepSize && state.text.trim()) applySize(sizeFor(textUnits(state.text)));
+    var n = totalPanels();
     if (state.text.trim()) state.panels = ruleStoryboard();
     else if (force || state.panels.length !== n) {
       var old = state.panels; state.panels = [];
@@ -322,7 +346,16 @@
 
   function buildPrompt(platform) {
     if (!state.panels.length) return '（請先在左側輸入故事文字，再按「規則式分鏡」或「AI 分鏡」）';
-    return byId(PLATFORMS, platform || state.platform).build(opt());
+    var pf = byId(PLATFORMS, platform || state.platform), o = opt(), ppp = state.settings.panels;
+    var pages = Math.ceil(o.panels.length / ppp);
+    if (o.s.genMode === 'each' || pages <= 1) return pf.build(o);
+    // 多頁：每頁一段完整提示詞（各自帶角色設定），依序生成
+    var out = [];
+    for (var p = 0; p < pages; p++) {
+      var op = Object.assign({}, o, { panels: o.panels.slice(p * ppp, (p + 1) * ppp) });
+      out.push('===== 第 ' + (p + 1) + ' / ' + pages + ' 頁 =====\n' + (p ? '（接續上一頁的故事，角色長相與畫風必須和前面各頁完全一致）\n' : '') + pf.build(op));
+    }
+    return '（共 ' + pages + ' 頁、每頁 ' + ppp + ' 格：請依序生成，每頁一張圖；從第 2 頁起可把第 1 頁成品一起上傳當角色參考。）\n\n' + out.join('\n\n');
   }
 
   /* ================= 繪製 ================= */
@@ -346,7 +379,9 @@
     fillSelect($('optTone'), D.TONES, s.tone);
     fillSelect($('optDir'), D.DIRECTIONS, s.dir);
     $('optSfx').checked = !!s.sfx;
-    $('topicPanels').textContent = s.panels;
+    fillSelect($('optPages'), [1, 2, 3, 4, 5, 6], s.pages, function (x) { return x + ' 頁'; });
+    $('optAuto').checked = !!s.autoSize;
+    $('topicPanels').textContent = sizeLabel();
     document.querySelectorAll('input[name="genMode"]').forEach(function (r) { r.checked = r.value === s.genMode; });
   }
 
@@ -393,7 +428,8 @@
         return '<label class="fld"><span>' + label + '</span><select data-pi="' + i + '" data-pk="' + k + '">' + list.map(function (x) {
           return '<option value="' + x.id + '"' + (x.id === p[k] ? ' selected' : '') + '>' + x.zh + '</option>'; }).join('') + '</select></label>';
       }
-      return '<div class="panel-card"><div class="panel-no">' + (i + 1) + '<small>/' + n + '</small></div><div class="panel-body">' +
+      var ppp = state.settings.panels, hdr = n > ppp && i % ppp === 0 ? '<div class="page-sep">📄 第 ' + (i / ppp + 1) + ' / ' + Math.ceil(n / ppp) + ' 頁</div>' : '';
+      return hdr + '<div class="panel-card"><div class="panel-no">' + (i + 1) + '<small>/' + n + '</small></div><div class="panel-body">' +
         '<label class="fld wide"><span>畫面動作</span><textarea rows="1" data-pi="' + i + '" data-pk="action">' + esc(p.action) + '</textarea></label>' +
         inp('scene', '場景', '例：辦公室') + inp('chars', '登場角色（用、分隔）', '例：小晴、林姐') +
         sel('expr', '表情', D.EXPRESSIONS) + sel('shot', '鏡頭', D.SHOTS) +
@@ -522,7 +558,7 @@
   }
 
   function ruleScript() {
-    var raw = state.topic.text.trim(), n = state.settings.panels;
+    var raw = state.topic.text.trim(), n = totalPanels();
     var tp = findTopic(raw), custom = !!state.topic.ctx.trim();
     var t = tp || D.GENERIC_TOPIC, T = tp ? tp.title : cleanTopic(raw);
     var ctx = state.topic.ctx.trim() || t.ctx;
@@ -570,27 +606,28 @@
   }
 
   function aiScriptPrompt() {
-    var n = state.settings.panels, r = topicRoles();
+    var n = totalPanels(), auto = state.settings.autoSize, r = topicRoles();
     var ca = activeChars().filter(function (c) { return c.name === r.a; })[0] || {}, cb = activeChars().filter(function (c) { return c.name === r.b; })[0] || {};
     var type = byId(D.SCRIPT_TYPES, state.topic.type).zh;
-    return '你是擅長把知識畫成漫畫的編劇。請用剛好 ' + n + ' 格的短篇漫畫，向一般大眾解釋「' + cleanTopic(state.topic.text) + '」。\n' + '（使用者原始需求：' + state.topic.text.trim() + '）\n' +
+    return '你是擅長把知識畫成漫畫的編劇。請用' + (auto ? '篇幅合適' : '剛好 ' + n + ' 格') + '的短篇漫畫，向一般大眾解釋「' + cleanTopic(state.topic.text) + '」。\n' + '（使用者原始需求：' + state.topic.text.trim() + '）\n' +
       '腳本類型：' + type + '\n內容風格：' + byId(D.TONES, state.settings.tone).zh + '——' + byId(D.TONES, state.settings.tone).desc + '\n講解者：' + r.a + (ca.personality ? '（' + ca.personality + '）' : '') + '\n提問者／主角：' + r.b + (cb.personality ? '（' + cb.personality + '）' : '') + '\n' +
       (state.topic.ctx.trim() ? '舉例情境：' + state.topic.ctx.trim() + '\n' : '') +
-      '規則：\n- 剛好 ' + n + ' 行，每行是一格\n- 每行格式：角色名稱＋動作描述：「對白」（每行都要寫出角色名稱，不要用他／她代替）\n- 對白用繁體中文口語，每句 25 字以內\n- 內容要正確，重點講清楚，不要杜撰數據\n- 第一格提出問題或情境，最後一格要有總結或小笑點\n- 只輸出 ' + n + ' 行腳本，不要編號、標題或任何說明';
+      '規則：\n' + (auto ? AUTO_RULE + '- 第一行只寫「篇幅：X 頁 × Y 格」，接著剛好 X×Y 行腳本，每行是一格\n' : '- 剛好 ' + n + ' 行，每行是一格\n') + '- 每行格式：角色名稱＋動作描述：「對白」（每行都要寫出角色名稱，不要用他／她代替）\n- 對白用繁體中文口語，每句 25 字以內\n- 內容要正確，重點講清楚，不要杜撰數據\n- 第一格提出問題或情境，最後一格要有總結或小笑點\n' + (auto ? '- 除了第一行篇幅，只輸出腳本，不要編號、標題或任何說明' : '- 只輸出 ' + n + ' 行腳本，不要編號、標題或任何說明');
   }
 
-  function applyScript(script, how) {
+  function applyScript(script, how, keepSize) {
     var mood = byId(D.SCRIPT_TYPES, state.topic.type).mood;
     state.settings.mood = mood;
     state.text = script; $('srcText').value = script; updateTextCount();
-    renderSettings(); setSrcTab('text'); storyboard(true);
+    renderSettings(); setSrcTab('text'); storyboard(true, keepSize);
     toast(how + '腳本已產生，可在文字框修改後按「規則式分鏡」重新拆格');
   }
 
   function ruleTopic() {
     if (!state.topic.text.trim()) { toast('請先輸入主題，例如：SWOT 分析'); $('topicText').focus(); return; }
     var hit = findTopic(state.topic.text);
-    applyScript(ruleScript(), '規則式');
+    if (state.settings.autoSize) applySize(sizeFor(hit ? hit.points.length + 3 : 4));
+    applyScript(ruleScript(), '規則式', true);
     $('topicStatus').textContent = hit ? '✓ 使用內建主題「' + hit.title + '」的重點' : '⚠ 這個主題不在內建清單，已用通用講解結構；想要更具體的內容請用「🤖 AI 生腳本」。';
   }
 
@@ -602,11 +639,15 @@
       var model = aiModel();
       var txt = await callLLM(prefs.aiProvider, model, prefs.aiKey, aiScriptPrompt());
       var lines = txt.replace(/```[a-z]*/g, '').split(/\n+/).map(function (s) { return s.replace(/^\s*(第?\s*\d+\s*格?\s*[.、:：)）]\s*|[-*•]\s*)/, '').trim(); }).filter(Boolean);
+      var size = null, m0 = lines[0] && lines[0].match(/(\d+)\s*頁\s*[×xX*✕]\s*(\d+)\s*格/);
+      if (m0) { lines.shift(); if (state.settings.autoSize) size = normSize(+m0[1], +m0[2]); }
       if (!lines.length) throw new Error('AI 沒有回傳腳本');
-      applyScript(lines.slice(0, state.settings.panels).join('\n'), 'AI ');
-      $('topicStatus').textContent = '✓ AI 腳本完成（' + model + '）';
+      if (state.settings.autoSize && !size) size = sizeFor(lines.length);
+      if (size) applySize(size);
+      applyScript(lines.slice(0, totalPanels()).join('\n'), 'AI ', true);
+      $('topicStatus').textContent = '✓ AI 腳本完成（' + model + '）' + (size ? '，AI 決定 ' + size.pages + ' 頁 × ' + size.panels + ' 格' : '');
     } catch (err) {
-      applyScript(ruleScript(), '規則式');
+      ruleTopic();
       $('topicStatus').textContent = '⚠ AI 失敗，已改用規則式腳本：' + err.message;
     } finally { btn.disabled = false; }
   }
@@ -629,7 +670,7 @@
     $('topicText').value = state.topic.text; $('topicCtx').value = state.topic.ctx;
     var tp = findTopic(state.topic.text);
     $('topicCtx').placeholder = '留空用預設' + (tp ? '：' + tp.ctx : '，例：咖啡店');
-    $('topicPanels').textContent = state.settings.panels;
+    $('topicPanels').textContent = sizeLabel();
     renderTopicChars(); setSrcTab(state.topic.tab);
   }
 
@@ -684,26 +725,32 @@
   }
 
   function aiPrompt() {
-    var n = state.settings.panels, chars = activeChars();
-    return '你是專業漫畫分鏡師。請把下面的故事改編成剛好 ' + n + ' 格的短篇漫畫分鏡，情緒基調：' + byId(D.MOODS, state.settings.mood).zhDesc + '，要有起承轉合與最後一格的笑點或收尾。\n' + '內容風格：' + byId(D.TONES, state.settings.tone).zh + '——' + byId(D.TONES, state.settings.tone).desc + '（畫面動作與對白都要符合這個風格）\n' +
+    var n = totalPanels(), auto = state.settings.autoSize, chars = activeChars();
+    return '你是專業漫畫分鏡師。請把下面的故事改編成' + (auto ? '篇幅合適' : '剛好 ' + n + ' 格') + '的短篇漫畫分鏡，情緒基調：' + byId(D.MOODS, state.settings.mood).zhDesc + '，要有起承轉合與最後一格的笑點或收尾。\n' + '內容風格：' + byId(D.TONES, state.settings.tone).zh + '——' + byId(D.TONES, state.settings.tone).desc + '（畫面動作與對白都要符合這個風格）\n' +
       '登場角色：' + (chars.length ? chars.map(function (c) { return c.name + (c.personality ? '（' + c.personality + '）' : ''); }).join('、') : '依故事自行判斷') + '\n' +
-      '只輸出 JSON 陣列（不要 Markdown、不要說明），長度剛好 ' + n + '，每個元素格式：\n' +
+      (auto ? AUTO_RULE + '只輸出 JSON 物件（不要 Markdown、不要說明）：{"pages":頁數,"panels_per_page":每頁格數,"reason":"一句話說明為什麼這樣安排篇幅","panels":[長度剛好 頁數×每頁格數]}，panels 每個元素格式：\n'
+        : '只輸出 JSON 陣列（不要 Markdown、不要說明），長度剛好 ' + n + '，每個元素格式：\n') +
       '{"scene":"中文場景（含時間地點）","scene_en":"English scene","action":"中文畫面動作描述，一到兩句，具體可畫","action_en":"English visual action description",' +
       '"characters":["出場角色名稱"],"expression":"' + D.EXPRESSIONS.map(function (x) { return x.id; }).join('|') + '","speaker":"說話者名稱或空字串",' +
       '"dialogue":"繁體中文對白，20 字以內，沒有就空字串","shot":"' + D.SHOTS.map(function (x) { return x.id; }).join('|') + '","sfx":"音效字或空字串"}\n\n故事：\n"""\n' + state.text.trim() + '\n"""';
   }
 
   function parseAiPanels(txt) {
-    var s = txt.indexOf('['), e = txt.lastIndexOf(']');
-    if (s < 0 || e < s) throw new Error('AI 回傳的不是 JSON 陣列');
-    var arr = JSON.parse(txt.slice(s, e + 1));
-    if (!Array.isArray(arr) || !arr.length) throw new Error('AI 回傳空的分鏡');
+    // 一般模式回傳陣列；自動篇幅模式回傳 {pages, panels_per_page, reason, panels}
+    var s1 = txt.indexOf('['), s2 = txt.indexOf('{'), data;
+    if (s2 >= 0 && (s1 < 0 || s2 < s1)) data = JSON.parse(txt.slice(s2, txt.lastIndexOf('}') + 1));
+    else if (s1 >= 0) data = JSON.parse(txt.slice(s1, txt.lastIndexOf(']') + 1));
+    else throw new Error('AI 回傳的不是 JSON');
+    var arr = Array.isArray(data) ? data : (data && data.panels) || [];
+    if (!arr.length) throw new Error('AI 回傳空的分鏡');
     var exprIds = D.EXPRESSIONS.map(function (x) { return x.id; }), shotIds = D.SHOTS.map(function (x) { return x.id; });
-    return arr.slice(0, state.settings.panels).map(function (p, i) {
+    var res = arr.map(function (p, i) {
       return { scene: p.scene || '', sceneEn: p.scene_en || '', action: p.action || '', actionEn: p.action_en || '',
         chars: (Array.isArray(p.characters) ? p.characters : []).join('、'), expr: exprIds.indexOf(p.expression) >= 0 ? p.expression : 'calm',
         speaker: p.speaker || '', dialogue: p.dialogue || '', shot: shotIds.indexOf(p.shot) >= 0 ? p.shot : autoShot(i, arr.length, 'calm'), sfx: state.settings.sfx ? (p.sfx || '') : '' };
     });
+    res.meta = Array.isArray(data) ? null : data;
+    return res;
   }
 
   async function aiStoryboard() {
@@ -713,14 +760,19 @@
     try {
       var model = aiModel();
       var txt = await callLLM(prefs.aiProvider, model, prefs.aiKey, aiPrompt());
-      var panels = parseAiPanels(txt);
-      var n = state.settings.panels;
+      var panels = parseAiPanels(txt), meta = panels.meta, note = '';
+      if (state.settings.autoSize) {
+        var sz = meta && meta.pages && meta.panels_per_page ? normSize(+meta.pages, +meta.panels_per_page) : sizeFor(panels.length);
+        applySize(sz); note = '，AI 決定 ' + sz.pages + ' 頁 × ' + sz.panels + ' 格' + (meta && meta.reason ? '：' + meta.reason : '');
+      }
+      var n = totalPanels();
+      panels = panels.slice(0, n);
       while (panels.length < n) panels.push(blankPanel(panels.length, n));
       state.panels = panels;
       renderPanels(); renderOutput(); saveDraft();
-      $('aiStatus').textContent = '✓ AI 分鏡完成（' + model + '）';
+      $('aiStatus').textContent = '✓ AI 分鏡完成（' + model + '）' + note;
     } catch (err) {
-      state.panels = ruleStoryboard(); renderPanels(); renderOutput(); saveDraft();
+      storyboard(true);
       $('aiStatus').textContent = '⚠ AI 失敗，已改用規則式分鏡：' + err.message;
     } finally { btn.disabled = false; }
   }
@@ -737,7 +789,7 @@
     return '你是專業的 AI 生圖提示詞編修師。下面是程式自動組合、給「' + byId(PLATFORMS, state.platform).label + '」使用的' +
       (o.s.genMode === 'each' ? '逐格' : '整頁') + ' ' + o.panels.length + ' 格漫畫生圖提示詞，語句生硬、像表格。\n' +
       '請改寫成通順自然、畫面感強、生圖 AI 容易理解的提示詞：\n' +
-      '- 格數、每格順序、每格的鏡頭與登場角色都不能變，也不要新增或刪除劇情\n' +
+      '- 格數、每格順序、每格的鏡頭與登場角色都不能變，也不要新增或刪除劇情\n' + '- 若有多頁（===== 第 X / Y 頁 =====），每頁分開成段並保留這些標題\n' +
       '- 角色的外型、服裝、配色描述要完整保留，並維持「每一格角色外觀一致」的要求\n' +
       '- 引號「」裡的對白與音效字一字不改\n' +
       '- 圖片比例、畫風、色彩、閱讀方向、文字要求（不要錯字／浮水印）都要保留\n' +
@@ -779,6 +831,8 @@
     fillSelect($('setPlatform'), PLATFORMS, prefs.platform, function (p) { return p.label; });
     fillSelect($('setStyle'), D.STYLES, prefs.style);
     fillSelect($('setPanels'), D.PANEL_COUNTS, prefs.panels, function (x) { return x + ' 格'; });
+    fillSelect($('setPages'), [1, 2, 3, 4, 5, 6], prefs.pages || 1, function (x) { return x + ' 頁'; });
+    $('setAuto').checked = !!prefs.autoSize;
     fillSelect($('setRatio'), D.RATIOS, prefs.ratio);
     fillSelect($('setLayout'), D.LAYOUTS, prefs.layout);
     fillSelect($('setColor'), D.COLORS, prefs.color);
@@ -792,7 +846,7 @@
     openModal('settings');
   }
   function saveSettings() {
-    prefs.platform = $('setPlatform').value; prefs.style = $('setStyle').value; prefs.panels = +$('setPanels').value;
+    prefs.platform = $('setPlatform').value; prefs.style = $('setStyle').value; prefs.panels = +$('setPanels').value; prefs.pages = +$('setPages').value; prefs.autoSize = $('setAuto').checked;
     prefs.ratio = $('setRatio').value; prefs.layout = $('setLayout').value; prefs.color = $('setColor').value; prefs.lang = $('setLang').value; prefs.tone = $('setTone').value;
     prefs.theme = $('setTheme').value; prefs.aiProvider = $('setAiProvider').value; prefs.aiModel = $('setAiModel').value; prefs.aiKey = $('setAiKey').value.trim();
     prefs.aiModelCustom = $('setAiModelCustom').value.trim(); prefs.aiBase = $('setAiBase').value.trim();
@@ -860,7 +914,13 @@
 
     var map = { optTone: 'tone', optStyle: 'style', optLayout: 'layout', optRatio: 'ratio', optColor: 'color', optLang: 'lang', optBubble: 'bubble', optMood: 'mood', optDir: 'dir' };
     Object.keys(map).forEach(function (id) { $(id).addEventListener('change', function () { state.settings[map[id]] = this.value; renderOutput(); saveDraft(); }); });
-    $('optPanels').addEventListener('change', function () { state.settings.panels = +this.value; storyboard(true); });
+    // 手動改格數／頁數就關掉自動篇幅
+    $('optPanels').addEventListener('change', function () { state.settings.panels = +this.value; state.settings.autoSize = false; renderSettings(); storyboard(true, true); });
+    $('optPages').addEventListener('change', function () { state.settings.pages = +this.value; state.settings.autoSize = false; renderSettings(); storyboard(true, true); });
+    $('optAuto').addEventListener('change', function () {
+      state.settings.autoSize = this.checked;
+      if (this.checked && state.text.trim()) { storyboard(true); toast('已依內容自動調整為 ' + sizeLabel()); } else { renderSettings(); saveDraft(); }
+    });
     $('optSfx').addEventListener('change', function () { state.settings.sfx = this.checked; if (state.text.trim() && !state.edited) storyboard(true); else { renderOutput(); saveDraft(); } });
     document.querySelectorAll('input[name="genMode"]').forEach(function (r) { r.addEventListener('change', function () { state.settings.genMode = this.value; renderOutput(); saveDraft(); }); });
 
@@ -951,7 +1011,7 @@
     $('settingsSave').addEventListener('click', function () { saveSettings(); closeModal('settings'); toast('已儲存常用設定（新專案會套用）'); });
     $('settingsApply').addEventListener('click', function () {
       saveSettings();
-      Object.assign(state.settings, { tone: prefs.tone, style: prefs.style, panels: +prefs.panels, ratio: prefs.ratio, layout: prefs.layout, color: prefs.color, lang: prefs.lang });
+      Object.assign(state.settings, { tone: prefs.tone, style: prefs.style, panels: +prefs.panels, pages: +prefs.pages || 1, autoSize: !!prefs.autoSize, ratio: prefs.ratio, layout: prefs.layout, color: prefs.color, lang: prefs.lang });
       state.platform = prefs.platform; renderSettings(); renderTabs(); storyboard(true); closeModal('settings'); toast('已儲存並套用到目前專案');
     });
     $('settingsReset').addEventListener('click', function () { prefs = Object.assign({}, PREF_DEFAULTS, { aiKey: prefs.aiKey, aiProvider: prefs.aiProvider, aiModel: prefs.aiModel, aiModelCustom: prefs.aiModelCustom, aiBase: prefs.aiBase }); lsSet(LS.prefs, prefs); applyTheme(); openSettings(); toast('已恢復預設（AI 連線設定保留）'); });
@@ -998,7 +1058,7 @@
   window.__comicPrompt = {
     state: state, prefs: function () { return prefs; }, loadExample: loadExample, storyboard: storyboard, buildPrompt: buildPrompt,
     setPlatform: function (p) { state.platform = p; renderTabs(); renderOutput(); },
-    set: function (k, v) { state.settings[k] = v; renderSettings(); if (k === 'panels') storyboard(true); else renderOutput(); },
+    set: function (k, v) { state.settings[k] = v; renderSettings(); if (k === 'panels' || k === 'pages') storyboard(true, true); else if (k === 'autoSize') storyboard(true); else renderOutput(); },
     openSettings: openSettings, parseAiPanels: parseAiPanels, aiPrompt: aiPrompt,
     aiPolish: aiPolish, finalPrompt: finalPrompt, polishPrompt: polishPrompt, setTopic: function (o) { Object.assign(state.topic, o); renderTopic(); }, ruleScript: ruleScript, ruleTopic: ruleTopic, aiScriptPrompt: aiScriptPrompt
   };

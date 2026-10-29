@@ -117,6 +117,7 @@ textarea:focus,input:focus,select:focus{outline:none;border-color:var(--line);bo
 .tab{font:inherit;font-weight:900;font-size:14.5px;border:3px solid var(--line);border-bottom:0;background:var(--paper2);color:var(--ink);padding:7px 14px;margin-right:-3px;border-radius:10px 10px 0 0;cursor:pointer;white-space:nowrap}
 .tab.on{background:var(--accent);color:#1b1b1f}
 .pbadge{font-size:12px;font-weight:900;background:var(--accent2);color:#fff;border:2px solid var(--line);border-radius:999px;padding:1px 9px}
+.page-sep{font-weight:900;font-size:14px;margin:4px 0 8px;padding:4px 10px;border-left:5px solid var(--accent2);background:var(--paper2);border-radius:0 8px 8px 0}
 .srctabs .tab{font-size:14px;padding:6px 12px}
 .ptip{font-size:13px;color:var(--ink2);background:var(--paper2);border-left:4px solid var(--accent);padding:7px 10px;border-radius:0 8px 8px 0;margin:0 0 10px}
 #promptOut{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,"Noto Sans TC",monospace;font-size:13.5px;line-height:1.65;background:var(--field);border:2px solid var(--soft);border-radius:10px;padding:12px;margin:0;max-height:440px;overflow:auto}
@@ -200,7 +201,7 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
           <label class="fld"><span>提問者／主角</span><select id="topicB"></select></label>
           <label class="fld wide"><span>舉例情境（選填）</span><input type="text" id="topicCtx" placeholder="留空用預設，例：咖啡店"></label>
         </div>
-        <p class="hint" style="margin:8px 0 0">格數：<b id="topicPanels">4</b> 格（在 ② 漫畫設定調整）。講解者／提問者從 ③ 登場人物挑選，不足兩位會自動加入 Pico 與小米。</p>
+        <p class="hint" style="margin:8px 0 0">篇幅：<b id="topicPanels">4 格 × 1 頁</b>（在 ② 漫畫設定調整，或勾選自動由內容／AI 決定）。講解者／提問者從 ③ 登場人物挑選，不足兩位會自動加入 Pico 與小米。</p>
         <div class="row">
           <button class="btn primary" id="btnTopicRule" type="button">✂ 規則式生腳本</button>
           <button class="btn red" id="btnTopicAi" type="button">🤖 AI 生腳本</button>
@@ -225,7 +226,8 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
       <h2 id="h2s"><span class="step">2</span>漫畫設定</h2>
       <div class="opts">
         <label class="fld"><span>漫畫風格</span><select id="optStyle"></select></label>
-        <label class="fld"><span>格數</span><select id="optPanels"></select></label>
+        <label class="fld"><span>每頁格數</span><select id="optPanels"></select></label>
+        <label class="fld"><span>頁數</span><select id="optPages"></select></label>
         <label class="fld"><span>圖片比例</span><select id="optRatio"></select></label>
         <label class="fld"><span>版面排列</span><select id="optLayout"></select></label>
         <label class="fld"><span>色彩</span><select id="optColor"></select></label>
@@ -236,6 +238,7 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
         <label class="fld"><span>閱讀方向</span><select id="optDir"></select></label>
       </div>
       <div class="switches">
+        <label><input type="checkbox" id="optAuto"> 🤖 自動決定格數與頁數（依內容；按 AI 按鈕時由 AI 判斷）</label>
         <label><input type="checkbox" id="optSfx"> 加上音效字（碰！咻——）</label>
         <span class="seg" role="radiogroup" aria-label="生成方式">
           <label><input type="radio" name="genMode" value="page">整頁一張圖</label>
@@ -298,7 +301,9 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px 30px;display:flex;flex-wr
     <div class="sgrid">
       <label class="fld"><span>預設平台分頁</span><select id="setPlatform"></select></label>
       <label class="fld"><span>預設漫畫風格</span><select id="setStyle"></select></label>
-      <label class="fld"><span>預設格數</span><select id="setPanels"></select></label>
+      <label class="fld"><span>預設每頁格數</span><select id="setPanels"></select></label>
+      <label class="fld"><span>預設頁數</span><select id="setPages"></select></label>
+      <label class="fld" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="setAuto"> 預設開啟「自動決定格數與頁數」</label>
       <label class="fld"><span>預設比例</span><select id="setRatio"></select></label>
       <label class="fld"><span>預設版面</span><select id="setLayout"></select></label>
       <label class="fld"><span>預設色彩</span><select id="setColor"></select></label>
