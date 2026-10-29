@@ -15,7 +15,7 @@
 - ✅ 頂部跑馬燈（共用 Apps Script 端點、滑鼠移入暫停）＋ ⚙ 常用設定（底部「關於本工具」集中入口）
 - ✅ RWD（≤980px 單欄、≤560px 精簡；375px 無橫向捲動）、亮／暗色
 - ❌ 序號授權（不需要）
-- ⏳ GitHub Pages：尚未部署（實驗性新工具，部署前先問使用者）
+- ✅ GitHub Pages（2026-10-29 上線）：公開 repo <https://github.com/M255525/comic-prompt-studio>，網址 <https://m255525.github.io/comic-prompt-studio/>，`master`＋`.github/workflows/deploy-pages.yml`；程式牆與 github-dashboard 的 REPO_META 已登記（已從程式牆 LOCAL_APPS 移除）
 
 ## 注意
 - 知名卡通人物是**使用者 2026-10-29 明確要求**放進預設人物；外型描述須自寫簡短特徵，不可抄官方文案或附官方圖。警語（頁面頂部、關於彈窗、manual）寫明著作權屬原權利人、僅限個人學習／課堂練習／非營利、不可商用、部分平台會拒絕生成。範例故事維持用原創人物。不可加入真實人物。
